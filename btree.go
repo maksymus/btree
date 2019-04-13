@@ -3,6 +3,7 @@ package main
 import (
   "fmt"
   "reflect"
+  "btree/errors"
 )
 
 // https://www.geeksforgeeks.org/b-tree-set-1-introduction-2/
@@ -38,13 +39,17 @@ func NewBTree(degree uint) *BTree {
   return &BTree{degree: int(degree)}
 }
 
-func newNode(degree int) *node {
+func newNode(degree int) (*node, error) {
+  if degree < 2 {
+    return nil, errors.New("degree should be > 1")
+  }
+
   return &node{
     degree: degree,
     children: make([]*node, 0),
     keys: make([]interface{}, 0),
     isLeaf: true,
-  }
+  }, nil
 }
 
 func (btree *BTree) Empty() bool {
@@ -65,18 +70,19 @@ func (btree *BTree) Insert(key interface{})  {
 
   // create root if tree is empty
   if btree.root == nil {
-    n := newNode(btree.degree)
+    n, _ := newNode(btree.degree)
     n.keys = append(n.keys, key)
     btree.root = n
   } else {
     // if root is full then grow tree in size
     if btree.root.isFull() {
       // create new root
-      newRoot := newNode(btree.degree)
+      newRoot, _ := newNode(btree.degree)
       newRoot.isLeaf = false
 
       // assign root as a child of new root
-      newRoot.children = append(newRoot.children, btree.root)
+      newRoot.keys = append(newRoot.keys, nil)
+      newRoot.children = append(newRoot.children, btree.root, nil)
 
       // split old root - should create two children
       newRoot.splitChild(0, btree.root)
@@ -141,7 +147,6 @@ func (n *node) search(searchKey interface{}) *node {
 }
 
 func (n *node) insert(key interface{}) {
-  // if node is full then split
   if n.isFull() {
     // TODO
   } else {
@@ -154,13 +159,21 @@ func (n *node) insert(key interface{}) {
       }
     }
 
-    prev := key
-    n.keys = append(n.keys, nil)
-    for i, k := range n.keys {
-      if i >= idx {
-        n.keys[i] = prev
-        prev = k
-      }
+    if idx >= len(n.children) {
+      n.insertKey(idx, key)
+    } else {
+      n.children[idx].insert(key)
+    }
+  }
+}
+
+func (n *node) insertKey(idx int, key interface{}) {
+  prev := key
+  n.keys = append(n.keys, nil)
+  for i, k := range n.keys {
+    if i >= idx {
+      n.keys[i] = prev
+      prev = k
     }
   }
 }
@@ -175,24 +188,32 @@ func (n *node) splitChild(idx int, child *node)  {
   }
 
   // free space in parent node
-  for i := 2 * n.degree - 1; i > idx ; i-- {
-    n.keys[i+1] = n.keys[i]
-    n.children[i+1] = n.children[i]
+  for i := len(n.keys) - 1; i > idx ; i-- {
+    n.keys[i] = n.keys[i-1]
+  }
+
+  for i := len(n.children) - 1; i > idx ; i-- {
+    n.children[i] = n.children[i-1]
   }
 
   // pop up child mid elem to parent
-  mid := child.degree
+  mid := child.degree - 1
   n.keys[idx] = child.keys[mid]
-  n.children[idx] = child.children[mid]
 
   // move right keys/children to new child
-  otherChild := newNode(n.degree)
+  otherChild, _ := newNode(n.degree)
   otherChild.keys = child.keys[mid + 1:]
-  otherChild.children = child.children[mid + 1:]
+  if len(child.children) > 0 {
+    otherChild.children = child.children[mid+1:]
+  }
 
   // leave left keys/children in left child
   child.keys = child.keys[:mid]
-  child.children = child.children[:mid]
+  if len(child.children) > 0 {
+    child.children = child.children[:mid]
+  }
+
+  n.children[idx+1] = otherChild
 }
 
 func (n *node) isFull() bool {

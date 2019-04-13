@@ -8,6 +8,7 @@ import (
 
   "github.com/hashicorp/go-multierror"
   log "github.com/sirupsen/logrus"
+  "btree/errors"
 )
 
 // https://xml.apache.org/xindice/dev/guide-internals.html#3.+Data+storage
@@ -72,7 +73,7 @@ func newPaged(filename string, config Config) (*paged, error) {
 
 func (paged *paged) open() error {
   if paged.isOpen {
-    return fmt.Errorf("paged already opened")
+    return errors.New("paged already opened")
   }
 
   var file *os.File
@@ -128,7 +129,7 @@ func (paged *paged) read() error {
   var fh *fileHeader
 
   if err := read(paged, 0, uint32(paged.fileHeader.HeaderSize), fh); err != nil {
-    return err
+    return errors.WrapMsg(err, "failed to read page header")
   }
 
   paged.fileHeader = fh
@@ -143,7 +144,7 @@ func (paged *paged) write() error {
 
 func (paged *paged) getPage(pageNum int64) (*page, error) {
   if pageNum < 0 {
-    return nil, fmt.Errorf("negative page number")
+    return nil, errors.New("negative page number")
   }
 
   // todo use lru/other cache

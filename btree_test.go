@@ -90,7 +90,6 @@ func Test_BTree_Insert_OneNode_AcceptStructs(t *testing.T) {
       btree.Insert(&TestKey{3})
 
       Convey("Initial btree should not be empty", func() {
-
         root := btree.root
 
         So(root, ShouldNotBeNil)
@@ -102,6 +101,39 @@ func Test_BTree_Insert_OneNode_AcceptStructs(t *testing.T) {
       })
     })
   })
+}
+
+func Test_BTree_Insert_SplitRoot(t *testing.T)  {
+  Convey("Given btree with 3 keys in root", t, func() {
+    btree := NewBTree(2)
+    btree.Insert(1)
+    btree.Insert(4)
+    btree.Insert(3)
+
+    Convey("When element is inserted", func() {
+
+      btree.Insert(2)
+
+      Convey("Root is split and two children are created", func() {
+
+        root := btree.root
+
+        So(root, ShouldNotBeNil)
+        So(root.isLeaf, ShouldEqual, false)
+        So(len(root.keys), ShouldEqual, 1)
+        So(len(root.children), ShouldEqual, 2)
+
+        So(root.keys[0], ShouldEqual, 3)
+        So(len(root.children[0].keys), ShouldEqual, 2)
+        So(len(root.children[1].keys), ShouldEqual, 1)
+
+        So(root.children[0].keys[0], ShouldEqual, 1)
+        So(root.children[0].keys[1], ShouldEqual, 2)
+        So(root.children[1].keys[0], ShouldEqual, 4)
+      })
+    })
+  })
+
 }
 
 

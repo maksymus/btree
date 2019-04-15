@@ -39,7 +39,7 @@ func NewBTree(degree uint) *BTree {
   return &BTree{degree: int(degree)}
 }
 
-func newNode(degree int) (*node, error) {
+func newNode(degree int, isLeaf bool) (*node, error) {
   if degree < 2 {
     return nil, errors.New("degree should be > 1")
   }
@@ -48,7 +48,7 @@ func newNode(degree int) (*node, error) {
     degree: degree,
     children: make([]*node, 0),
     keys: make([]interface{}, 0),
-    isLeaf: true,
+    isLeaf: isLeaf,
   }, nil
 }
 
@@ -70,19 +70,17 @@ func (btree *BTree) Insert(key interface{})  {
 
   // create root if tree is empty
   if btree.root == nil {
-    n, _ := newNode(btree.degree)
+    n, _ := newNode(btree.degree, true)
     n.keys = append(n.keys, key)
     btree.root = n
   } else {
     // if root is full then grow tree in size
     if btree.root.isFull() {
       // create new root
-      newRoot, _ := newNode(btree.degree)
-      newRoot.isLeaf = false
+      newRoot, _ := newNode(btree.degree, true)
 
       // assign root as a child of new root
-      newRoot.keys = append(newRoot.keys, nil)
-      newRoot.children = append(newRoot.children, btree.root, nil)
+      newRoot.children = append(newRoot.children, btree.root)
 
       // split old root - should create two children
       newRoot.splitChild(0, btree.root)
@@ -147,34 +145,31 @@ func (n *node) search(searchKey interface{}) *node {
 }
 
 func (n *node) insert(key interface{}) {
-  if n.isFull() {
-    // TODO
-  } else {
-    idx := 0
-    for i, k := range n.keys {
-      if compare(key, k) >= 0 {
-        idx = i + 1
-      } else {
-        break;
-      }
-    }
-
-    if idx >= len(n.children) {
-      n.insertKey(idx, key)
+  // find index to insert
+  idx := 0
+  for i, k := range n.keys {
+    if compare(key, k) >= 0 {
+      idx = i + 1
     } else {
-      n.children[idx].insert(key)
+      break;
     }
   }
-}
 
-func (n *node) insertKey(idx int, key interface{}) {
-  prev := key
-  n.keys = append(n.keys, nil)
-  for i, k := range n.keys {
-    if i >= idx {
-      n.keys[i] = prev
-      prev = k
+  if n.isLeaf {
+    prev := key
+    n.keys = append(n.keys, nil)
+    for i, k := range n.keys {
+      if i >= idx {
+        n.keys[i] = prev
+        prev = k
+      }
     }
+  } else {
+    if n.children[idx].isFull() {
+      n.splitChild(idx, n.children[idx])
+      idx = idx + 1
+    }
+    n.children[idx].insert(key)
   }
 }
 
@@ -186,6 +181,13 @@ func (n *node) splitChild(idx int, child *node)  {
   if n.isFull() {
     panic("trying to insert element in full parent")
   }
+
+  // not a leaf anymore
+  n.isLeaf = false
+
+  // make space for new key and child
+  n.keys = append(n.keys, nil)
+  n.children = append(n.children, nil)
 
   // free space in parent node
   for i := len(n.keys) - 1; i > idx ; i-- {
@@ -201,7 +203,7 @@ func (n *node) splitChild(idx int, child *node)  {
   n.keys[idx] = child.keys[mid]
 
   // move right keys/children to new child
-  otherChild, _ := newNode(n.degree)
+  otherChild, _ := newNode(n.degree, child.isLeaf)
   otherChild.keys = child.keys[mid + 1:]
   if len(child.children) > 0 {
     otherChild.children = child.children[mid+1:]
@@ -210,7 +212,7 @@ func (n *node) splitChild(idx int, child *node)  {
   // leave left keys/children in left child
   child.keys = child.keys[:mid]
   if len(child.children) > 0 {
-    child.children = child.children[:mid]
+    child.children = child.children[:mid+1]
   }
 
   n.children[idx+1] = otherChild

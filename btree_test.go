@@ -133,9 +133,102 @@ func Test_BTree_Insert_SplitRoot(t *testing.T)  {
       })
     })
   })
-
 }
 
+func Test_BTree_Insert_Split(t *testing.T)  {
+  Convey("Given btree with keys inserted", t, func() {
+    btree := NewBTree(2)
+    btree.Insert(1)
+    btree.Insert(4)
+    btree.Insert(3)
+    btree.Insert(7)
+    btree.Insert(5)
+    btree.Insert(6)
+    btree.Insert(8)
+    btree.Insert(9)
+    btree.Insert(0)
+    btree.Insert(2)
+
+    Convey("Nodes should be in order", func() {
+      root := btree.root
+      child1 := root.children[0]
+      child2 := root.children[1]
+
+      child3 := child1.children[0]
+      child4 := child1.children[1]
+      child5 := child2.children[0]
+      child6 := child2.children[1]
+
+      validateNode(root, false, 2, []int { 5 })
+      validateNode(child1, false, 2, []int { 3 })
+      validateNode(child2, false, 2, []int { 7 })
+
+      validateNode(child3, true, 0, []int { 0, 1, 2 })
+      validateNode(child4, true, 0, []int { 4 })
+      validateNode(child5, true, 0, []int { 6 })
+      validateNode(child6, true, 0, []int { 8, 9 })
+    })
+  })
+}
+
+func Test_BTree_Insert_BigTest(t *testing.T)  {
+  Convey("Given btree with keys inserted", t, func() {
+    btree := NewBTree(3)
+    btree.Insert(1)
+    btree.Insert(3)
+    btree.Insert(7)
+    btree.Insert(10)
+    btree.Insert(11)
+    btree.Insert(13)
+    btree.Insert(14)
+    btree.Insert(15)
+    btree.Insert(18)
+    btree.Insert(16)
+    btree.Insert(19)
+    btree.Insert(24)
+    btree.Insert(25)
+    btree.Insert(26)
+    btree.Insert(21)
+    btree.Insert(4);
+    btree.Insert(5);
+    btree.Insert(20)
+    btree.Insert(22)
+    btree.Insert(2)
+    btree.Insert(17)
+    btree.Insert(12)
+    btree.Insert(6)
+
+    Convey("Nodes should be in order", func() {
+      // root := btree.root
+      // child1 := root.children[0]
+      // child2 := root.children[1]
+      //
+      // child3 := child1.children[0]
+      // child4 := child1.children[1]
+      // child5 := child2.children[0]
+      // child6 := child2.children[1]
+      //
+      // validateNode(root, false, 2, []int { 5 })
+      // validateNode(child1, false, 2, []int { 3 })
+      // validateNode(child2, false, 2, []int { 7 })
+      //
+      // validateNode(child3, true, 0, []int { 0, 1, 2 })
+      // validateNode(child4, true, 0, []int { 4 })
+      // validateNode(child5, true, 0, []int { 6 })
+      // validateNode(child6, true, 0, []int { 8, 9 })
+    })
+  })
+}
+
+func validateNode(n *node, isLeaf bool, numChildren int, keys []int)  {
+  So(n.isLeaf, ShouldEqual, isLeaf)
+  So(len(n.keys), ShouldEqual, len(keys))
+  So(len(n.children), ShouldEqual, numChildren)
+
+  for i, key := range keys {
+    So(n.keys[i], ShouldEqual, key)
+  }
+}
 
 type TestKey struct {
   i int

@@ -220,6 +220,40 @@ func Test_BTree_Insert_BigTest(t *testing.T)  {
   })
 }
 
+func Test_BTree_Delete_RootOneKey(t *testing.T) {
+  Convey("Given btree with one key", t, func() {
+    btree := NewBTree(2)
+    btree.Insert(2)
+
+    Convey("When elements are deleted", func() {
+      deleted := btree.Delete(2)
+
+      Convey("Root should be nil", func() {
+        root := btree.root
+        So(root, ShouldBeNil)
+        So(deleted, ShouldBeTrue)
+      })
+    })
+  })
+}
+
+
+func Test_BTree_Delete_RootOneKey_NotFound(t *testing.T) {
+  Convey("Given btree with one key", t, func() {
+    btree := NewBTree(2)
+    btree.Insert(2)
+
+    Convey("When elements are deleted and key not found", func() {
+      deleted := btree.Delete(1)
+
+      Convey("Root should be nil", func() {
+        validateNode(btree.root, true, 0, []int{2})
+        So(deleted, ShouldBeFalse)
+      })
+    })
+  })
+}
+
 func validateNode(n *node, isLeaf bool, numChildren int, keys []int)  {
   So(n.isLeaf, ShouldEqual, isLeaf)
   So(len(n.keys), ShouldEqual, len(keys))

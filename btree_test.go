@@ -1,6 +1,5 @@
 package main
 
-
 import (
   "fmt"
   . "github.com/smartystreets/goconvey/convey"
@@ -115,21 +114,13 @@ func Test_BTree_Insert_SplitRoot(t *testing.T)  {
       btree.Insert(2)
 
       Convey("Root is split and two children are created", func() {
-
         root := btree.root
+        child1 := root.children[0]
+        child2 := root.children[1]
 
-        So(root, ShouldNotBeNil)
-        So(root.isLeaf, ShouldEqual, false)
-        So(len(root.keys), ShouldEqual, 1)
-        So(len(root.children), ShouldEqual, 2)
-
-        So(root.keys[0], ShouldEqual, 3)
-        So(len(root.children[0].keys), ShouldEqual, 2)
-        So(len(root.children[1].keys), ShouldEqual, 1)
-
-        So(root.children[0].keys[0], ShouldEqual, 1)
-        So(root.children[0].keys[1], ShouldEqual, 2)
-        So(root.children[1].keys[0], ShouldEqual, 4)
+        validateNode(root, false, 2, []int { 3 })
+        validateNode(child1, true, 0, []int { 1, 2 })
+        validateNode(child2, true, 0, []int { 4 })
       })
     })
   })
@@ -199,23 +190,32 @@ func Test_BTree_Insert_BigTest(t *testing.T)  {
     btree.Insert(6)
 
     Convey("Nodes should be in order", func() {
-      // root := btree.root
-      // child1 := root.children[0]
-      // child2 := root.children[1]
-      //
-      // child3 := child1.children[0]
-      // child4 := child1.children[1]
-      // child5 := child2.children[0]
-      // child6 := child2.children[1]
-      //
-      // validateNode(root, false, 2, []int { 5 })
-      // validateNode(child1, false, 2, []int { 3 })
-      // validateNode(child2, false, 2, []int { 7 })
-      //
-      // validateNode(child3, true, 0, []int { 0, 1, 2 })
-      // validateNode(child4, true, 0, []int { 4 })
-      // validateNode(child5, true, 0, []int { 6 })
-      // validateNode(child6, true, 0, []int { 8, 9 })
+      // root/first level
+      root := btree.root
+
+      // second level
+      child1 := root.children[0]
+      child2 := root.children[1]
+
+      // third level
+      child3 := child1.children[0]
+      child4 := child1.children[1]
+      child5 := child1.children[2]
+      child6 := child1.children[3]
+      child7 := child2.children[0]
+      child8 := child2.children[1]
+      child9 := child2.children[2]
+
+      validateNode(root, false, 2, []int { 16 })
+      validateNode(child1, false, 4, []int { 3, 7, 13 })
+      validateNode(child2, false, 3, []int { 20, 24 })
+      validateNode(child3, true, 0, []int { 1, 2 })
+      validateNode(child4, true, 0, []int { 4, 5, 6 })
+      validateNode(child5, true, 0, []int { 10, 11, 12 })
+      validateNode(child6, true, 0, []int { 14, 15 })
+      validateNode(child7, true, 0, []int { 17, 18, 19 })
+      validateNode(child8, true, 0, []int { 21, 22 })
+      validateNode(child9, true, 0, []int { 25, 26 })
     })
   })
 }

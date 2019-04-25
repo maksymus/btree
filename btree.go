@@ -31,23 +31,29 @@ type node struct {
   isLeaf   bool          // is node a leaf
 }
 
+// Comparable interface
 type Comparable interface {
   Compare(other interface{}) int
 }
 
+// Create new BTree
 func NewBTree(degree uint) *BTree {
   return &BTree{degree: int(degree)}
 }
 
-func newNode(degree int, isLeaf bool) (*node, error) {
+func newNode(degree int, isLeaf bool, numKeys int, numChild int) (*node, error) {
   if degree < 2 {
     return nil, errors.New("degree should be > 1")
   }
 
+  if numChild < 0 {
+    numChild = 0
+  }
+
   return &node{
     degree: degree,
-    children: make([]*node, 0),
-    keys: make([]interface{}, 0),
+    keys: make([]interface{}, numKeys),
+    children: make([]*node, numChild),
     isLeaf: isLeaf,
   }, nil
 }
@@ -56,7 +62,7 @@ func (btree *BTree) Empty() bool {
   return btree.root == nil
 }
 
-func (btree *BTree) search(searchKey interface{}) *node {
+func (btree *BTree) Search(searchKey interface{}) *node {
   btree.checkKeyType(searchKey)
 
   if btree.root == nil {
@@ -70,14 +76,14 @@ func (btree *BTree) Insert(key interface{})  {
 
   // create root if tree is empty
   if btree.root == nil {
-    n, _ := newNode(btree.degree, true)
+    n, _ := newNode(btree.degree, true, 0, 0)
     n.keys = append(n.keys, key)
     btree.root = n
   } else {
     // if root is full then grow tree in size
     if btree.root.isFull() {
       // create new root
-      newRoot, _ := newNode(btree.degree, true)
+      newRoot, _ := newNode(btree.degree, true, 0, 0)
 
       // assign root as a child of new root
       newRoot.children = append(newRoot.children, btree.root)
@@ -100,11 +106,9 @@ func (btree *BTree) Insert(key interface{})  {
   }
 }
 
-func (btree *BTree) Delete(key interface{})  {
-  btree.checkKeyType(key)
-
-}
-
+// Check key if key type is supported
+// Currently int, float and Comparable types are supported
+// @panic if key type is not supported
 func (btree *BTree) checkKeyType(v interface{}) {
   if v == nil {
     panic("nil key value not allowed")
@@ -144,16 +148,10 @@ func (n *node) search(searchKey interface{}) *node {
   return nil
 }
 
+// Insert key
 func (n *node) insert(key interface{}) {
   // find index to insert
-  idx := 0
-  for i, k := range n.keys {
-    if compare(key, k) >= 0 {
-      idx = i + 1
-    } else {
-      break;
-    }
-  }
+  idx := n.findKey(key)
 
   if n.isLeaf {
     prev := key
@@ -166,13 +164,17 @@ func (n *node) insert(key interface{}) {
     }
   } else {
     if n.children[idx].isFull() {
+      // split child
       n.splitChild(idx, n.children[idx])
-      idx = idx + 1
+      if compare(key, n.keys[idx]) > 0 {
+        idx = idx + 1
+      }
     }
     n.children[idx].insert(key)
   }
 }
 
+// Split child key during insert if child key is full
 func (n *node) splitChild(idx int, child *node)  {
   if !child.isFull() {
     panic("trying to split non full node")
@@ -189,11 +191,12 @@ func (n *node) splitChild(idx int, child *node)  {
   n.keys = append(n.keys, nil)
   n.children = append(n.children, nil)
 
-  // free space in parent node
+  // free space in parent node for popped key
   for i := len(n.keys) - 1; i > idx ; i-- {
     n.keys[i] = n.keys[i-1]
   }
 
+  // free space in parent node one more child
   for i := len(n.children) - 1; i > idx ; i-- {
     n.children[i] = n.children[i-1]
   }
@@ -202,11 +205,14 @@ func (n *node) splitChild(idx int, child *node)  {
   mid := child.degree - 1
   n.keys[idx] = child.keys[mid]
 
+  numKeys := len(child.keys) - mid - 1
+  numChild := len(child.children) - mid - 1
+
   // move right keys/children to new child
-  otherChild, _ := newNode(n.degree, child.isLeaf)
-  otherChild.keys = child.keys[mid + 1:]
+  otherChild, _ := newNode(n.degree, child.isLeaf, numKeys, numChild)
+  copy(otherChild.keys, child.keys[mid + 1:])
   if len(child.children) > 0 {
-    otherChild.children = child.children[mid+1:]
+    copy(otherChild.children, child.children[mid+1:])
   }
 
   // leave left keys/children in left child
@@ -215,11 +221,32 @@ func (n *node) splitChild(idx int, child *node)  {
     child.children = child.children[:mid+1]
   }
 
+  // add new child to parent node
   n.children[idx+1] = otherChild
 }
 
+// Find matching key in node's keys
+// @return index of the key grater or equals to search key
+func (n *node) findKey(key interface{}) int {
+  idx := 0
+  for i, k := range n.keys {
+    if compare(key, k) > 0 {
+      idx = i + 1
+    } else {
+      break;
+    }
+  }
+  return idx
+}
+
+// True if number of keys is "2 * degree - 1"
 func (n *node) isFull() bool {
   return len(n.keys) == (2 * n.degree - 1)
+}
+
+// True if number of keys is "degree - 1"
+func (n *node) isEmpty() bool {
+  return len(n.keys) == n.degree - 1
 }
 
 func compare(i1 interface{}, i2 interface{}) int {
@@ -237,7 +264,25 @@ func compare(i1 interface{}, i2 interface{}) int {
     return 0
   }
 
-  // TODO add its and floats
+  if _, ok := i1.(float32); ok {
+    if i1.(float32) < i2.(float32) {
+      return -1
+    } else if i1.(float32) > i2.(float32) {
+      return 1
+    }
+
+    return 0
+  }
+
+  if _, ok := i1.(float64); ok {
+    if i1.(float64) < i2.(float64) {
+      return -1
+    } else if i1.(float64) > i2.(float64) {
+      return 1
+    }
+
+    return 0
+  }
 
   if _, ok := i1.(Comparable); ok {
     return i1.(Comparable).Compare(i2)

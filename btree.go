@@ -58,6 +58,31 @@ func newNode(degree int, isLeaf bool, numKeys int, numChild int) (*node, error) 
   }, nil
 }
 
+// Delete key from tree
+// @return true if key found and deleted
+func (btree *BTree) Delete(searchKey interface{}) bool {
+  btree.checkKeyType(searchKey)
+
+  if btree.Empty() {
+    return false
+  }
+
+  deleted := btree.root.delete(searchKey)
+
+  // if no keys left in root
+  if len(btree.root.keys) == 0 {
+    // if no children left in root then set root to nil
+    // else replace root by first root child
+    if btree.root.isLeaf {
+      btree.root = nil
+    } else {
+      btree.root = btree.root.children[0]
+    }
+  }
+
+  return deleted
+}
+
 func (btree *BTree) Empty() bool {
   return btree.root == nil
 }
@@ -131,6 +156,39 @@ func (btree *BTree) checkKeyType(v interface{}) {
     reflect.TypeOf(v)))
 }
 
+// Recursively delete node by key
+// @return true if key found and key is deleted
+func (n *node) delete(searchKey interface{}) bool {
+  // find index to delete
+  idx := n.findKey(searchKey)
+
+  // if key is present in this node then remove from node
+  // else search in child nodes
+  if idx < len(n.keys) && compare(n.keys[idx], searchKey) == 0 {
+    if n.isLeaf {
+      n.deleteFromLeaf(idx)
+    } else {
+      n.deleteFromInternal(idx)
+    }
+  } else {
+    // if key not found and it is a leaf node then return
+    if n.isLeaf {
+      return false
+    }
+  }
+
+  return true
+}
+
+// remove key from nodes key list
+func (n *node) deleteFromLeaf(idx int) {
+  n.keys = append(n.keys[:idx], n.keys[idx+1:]...)
+}
+
+func (n *node) deleteFromInternal(idx int) {
+}
+
+// Search key by key
 func (n *node) search(searchKey interface{}) *node {
   for i, key := range n.keys {
     if compare(searchKey, key) == 0 {

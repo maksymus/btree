@@ -71,12 +71,12 @@ func (btree *BTree) Delete(searchKey interface{}) bool {
 
   // if no keys left in root
   if len(btree.root.keys) == 0 {
-    // if no children left in root then set root to nil
-    // else replace root by first root child
-    if btree.root.isLeaf {
-      btree.root = nil
-    } else {
+    // if not a leaf then replace root by first root child
+    // else set root to nil
+    if !btree.root.isLeaf {
       btree.root = btree.root.children[0]
+    } else {
+      btree.root = nil
     }
   }
 
@@ -158,13 +158,13 @@ func (btree *BTree) checkKeyType(v interface{}) {
 
 // Recursively delete node by key
 // @return true if key found and key is deleted
-func (n *node) delete(searchKey interface{}) bool {
+func (n *node) delete(key interface{}) bool {
   // find index to delete
-  idx := n.findKey(searchKey)
+  idx := n.findKey(key)
 
   // if key is present in this node then remove from node
   // else search in child nodes
-  if idx < len(n.keys) && compare(n.keys[idx], searchKey) == 0 {
+  if idx < len(n.keys) && compare(n.keys[idx], key) == 0 {
     if n.isLeaf {
       n.deleteFromLeaf(idx)
     } else {
@@ -175,6 +175,17 @@ func (n *node) delete(searchKey interface{}) bool {
     if n.isLeaf {
       return false
     }
+
+    // num of key in node should be more than (degree - 1) - fill the child if less/equal
+    if len(n.keys) < n.degree {
+      n.fill(idx)
+    }
+
+    if idx > len(n.keys) {
+      idx--
+    }
+
+    n.children[idx].delete(key)
   }
 
   return true
@@ -187,6 +198,27 @@ func (n *node) deleteFromLeaf(idx int) {
 
 func (n *node) deleteFromInternal(idx int) {
 }
+
+func (n *node) fill(idx int) {
+  borrowPrev := func () {}
+  borrowNext := func () {}
+  merge := func() {}
+
+  // if left child has more than (degree - 1) then borrow from left
+  // else if right child has more than (degree - 1) then borrow from right
+  // else merge nodes
+  if idx != 0 && len(n.children[idx-1].keys) >= n.degree {
+     borrowPrev()
+  } else if idx != n.degree && len(n.children[idx+1].keys) >= n.degree {
+    borrowNext()
+  } else {
+    if idx >= n.degree {
+      idx--
+    }
+    merge()
+  }
+}
+
 
 // Search key by key
 func (n *node) search(searchKey interface{}) *node {
@@ -302,10 +334,10 @@ func (n *node) isFull() bool {
   return len(n.keys) == (2 * n.degree - 1)
 }
 
-// True if number of keys is "degree - 1"
-func (n *node) isEmpty() bool {
-  return len(n.keys) == n.degree - 1
-}
+// // True if number of keys is "degree - 1"
+// func (n *node) isEmpty() bool {
+//   return len(n.keys) == n.degree - 1
+// }
 
 func compare(i1 interface{}, i2 interface{}) int {
   if reflect.TypeOf(i1) != reflect.TypeOf(i2) {

@@ -180,8 +180,8 @@ func Test_BTree_Insert_BigTest(t *testing.T)  {
     btree.Insert(25)
     btree.Insert(26)
     btree.Insert(21)
-    btree.Insert(4);
-    btree.Insert(5);
+    btree.Insert(4)
+    btree.Insert(5)
     btree.Insert(20)
     btree.Insert(22)
     btree.Insert(2)

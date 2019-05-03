@@ -1,9 +1,9 @@
 package main
 
 import (
+  "btree/errors"
   "fmt"
   "reflect"
-  "btree/errors"
 )
 
 // https://www.geeksforgeeks.org/b-tree-set-1-introduction-2/
@@ -20,7 +20,7 @@ import (
 */
 
 type BTree struct {
-  root   *node  // btree root
+  root   *node // btree root
   degree int   // min number of keys
 }
 
@@ -51,10 +51,10 @@ func newNode(degree int, isLeaf bool, numKeys int, numChild int) (*node, error) 
   }
 
   return &node{
-    degree: degree,
-    keys: make([]interface{}, numKeys),
+    degree:   degree,
+    keys:     make([]interface{}, numKeys),
     children: make([]*node, numChild),
-    isLeaf: isLeaf,
+    isLeaf:   isLeaf,
   }, nil
 }
 
@@ -96,7 +96,7 @@ func (btree *BTree) Search(searchKey interface{}) *node {
   return btree.root.search(searchKey)
 }
 
-func (btree *BTree) Insert(key interface{})  {
+func (btree *BTree) Insert(key interface{}) {
   btree.checkKeyType(key)
 
   // create root if tree is empty
@@ -176,7 +176,9 @@ func (n *node) delete(key interface{}) bool {
       return false
     }
 
-    // num of key in node should be more than (degree - 1) - fill the child if less/equal
+    // num of key in node should be more than (degree - 1)
+    // if number of keys is less/equals to degree - 1)
+    // then borrow key from left/right neighbour or merge
     if len(n.keys) < n.degree {
       n.fill(idx)
     }
@@ -197,18 +199,80 @@ func (n *node) deleteFromLeaf(idx int) {
 }
 
 func (n *node) deleteFromInternal(idx int) {
+  // TODO
 }
 
 func (n *node) fill(idx int) {
-  borrowPrev := func () {}
-  borrowNext := func () {}
-  merge := func() {}
+  // last key of sibling goes up to parent node n (this node)
+  // idx-1 key from parent node n goes down to child as first node
+  // sibling's last child becomes child's first child
+  borrowPrev := func() {
+    child := n.children[idx]
+    sibling := n.children[idx-1]
 
+    // move down current node's idx-1 key to child first key
+    child.keys = append([]interface{}{n.keys[idx-1]}, child.keys...)
+
+    // move sibling's last child to child's first child
+    if !child.isLeaf {
+      child.children = append([]*node{sibling.children[len(sibling.children)-1]}, child.children...)
+      sibling.children = sibling.children[:len(sibling.children)-1]
+    }
+
+    // move up siblings last key to current node's idx-1
+    n.keys[idx-1] = sibling.keys[len(sibling.keys)-1]
+    sibling.keys = sibling.keys[:len(sibling.keys)-1]
+  }
+
+  // first key of sibling goes up to parent node n (this node)
+  // idx+1 key from parent node n goes down to child as last node
+  // sibling's first child becomes child's last child
+  borrowNext := func() {
+    child := n.children[idx]
+    sibling := n.children[idx+1]
+
+    // move down current node's idx+1 key to child last key
+    child.keys = append(child.keys, n.keys[idx+1])
+
+    // move sibling's fist child to child's last child
+    if !child.isLeaf {
+      child.children = append(child.children, sibling.children[0])
+      sibling.children = sibling.children[1:]
+    }
+
+    // moving up siblings first key to current node's idx+1
+    n.keys[idx+1] = sibling.keys[0]
+    sibling.keys = sibling.keys[1:]
+  }
+
+  // merge idx and idx+1 children
+  // idx+1 child is freed
+  merge := func() {
+    child := n.children[idx]
+    sibling := n.children[idx+1]
+
+    // move down idx key to child
+    child.keys = append(child.keys, child.keys[idx])
+
+    // append siblings key to child
+    child.keys = append(child.keys, sibling.keys...)
+
+    // append siblings children to child
+    if !child.isLeaf {
+      child.children = append(child.children, sibling.children...)
+    }
+
+    // remove key/child from current node
+    n.keys = append(n.keys[:idx], n.keys[idx+1:]...)
+    n.children = append(n.children[:idx+1], n.children[idx+2:]...)
+  }
+
+  // ================ LOGIC starts here
   // if left child has more than (degree - 1) then borrow from left
   // else if right child has more than (degree - 1) then borrow from right
   // else merge nodes
   if idx != 0 && len(n.children[idx-1].keys) >= n.degree {
-     borrowPrev()
+    borrowPrev()
   } else if idx != n.degree && len(n.children[idx+1].keys) >= n.degree {
     borrowNext()
   } else {
@@ -218,7 +282,6 @@ func (n *node) fill(idx int) {
     merge()
   }
 }
-
 
 // Search key by key
 func (n *node) search(searchKey interface{}) *node {
@@ -265,7 +328,7 @@ func (n *node) insert(key interface{}) {
 }
 
 // Split child key during insert if child key is full
-func (n *node) splitChild(idx int, child *node)  {
+func (n *node) splitChild(idx int, child *node) {
   if !child.isFull() {
     panic("trying to split non full node")
   }
@@ -282,12 +345,12 @@ func (n *node) splitChild(idx int, child *node)  {
   n.children = append(n.children, nil)
 
   // free space in parent node for popped key
-  for i := len(n.keys) - 1; i > idx ; i-- {
+  for i := len(n.keys) - 1; i > idx; i-- {
     n.keys[i] = n.keys[i-1]
   }
 
   // free space in parent node one more child
-  for i := len(n.children) - 1; i > idx ; i-- {
+  for i := len(n.children) - 1; i > idx; i-- {
     n.children[i] = n.children[i-1]
   }
 
@@ -300,7 +363,7 @@ func (n *node) splitChild(idx int, child *node)  {
 
   // move right keys/children to new child
   otherChild, _ := newNode(n.degree, child.isLeaf, numKeys, numChild)
-  copy(otherChild.keys, child.keys[mid + 1:])
+  copy(otherChild.keys, child.keys[mid+1:])
   if len(child.children) > 0 {
     copy(otherChild.children, child.children[mid+1:])
   }
@@ -323,7 +386,7 @@ func (n *node) findKey(key interface{}) int {
     if compare(key, k) > 0 {
       idx = i + 1
     } else {
-      break;
+      break
     }
   }
   return idx
@@ -331,7 +394,7 @@ func (n *node) findKey(key interface{}) int {
 
 // True if number of keys is "2 * degree - 1"
 func (n *node) isFull() bool {
-  return len(n.keys) == (2 * n.degree - 1)
+  return len(n.keys) == (2*n.degree - 1)
 }
 
 // // True if number of keys is "degree - 1"

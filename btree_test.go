@@ -15,6 +15,8 @@ func Test_BTree_Empty(t *testing.T) {
       empty := btree.Empty()
       So(empty, ShouldEqual, true)
     })
+
+    checkTreeInvariants(btree)
   })
 }
 
@@ -40,6 +42,8 @@ func Test_BTree_Insert_OneNode_1Elem(t *testing.T) {
         }
       })
     })
+
+    checkTreeInvariants(btree)
   })
 }
 
@@ -75,6 +79,8 @@ func Test_BTree_Insert_OneNode_KeysShouldBeOrdered(t *testing.T) {
         }
       })
     })
+
+    checkTreeInvariants(btree)
   })
 }
 
@@ -99,6 +105,8 @@ func Test_BTree_Insert_OneNode_AcceptStructs(t *testing.T) {
         }
       })
     })
+
+    checkTreeInvariants(btree)
   })
 }
 
@@ -123,6 +131,8 @@ func Test_BTree_Insert_SplitRoot(t *testing.T)  {
         validateNode(child2, true, 0, []int { 4 })
       })
     })
+
+    checkTreeInvariants(btree)
   })
 }
 
@@ -159,6 +169,8 @@ func Test_BTree_Insert_Split(t *testing.T)  {
       validateNode(child5, true, 0, []int { 6 })
       validateNode(child6, true, 0, []int { 8, 9 })
     })
+
+    checkTreeInvariants(btree)
   })
 }
 
@@ -217,6 +229,8 @@ func Test_BTree_Insert_BigTest(t *testing.T)  {
       validateNode(child8, true, 0, []int { 21, 22 })
       validateNode(child9, true, 0, []int { 25, 26 })
     })
+
+    checkTreeInvariants(btree)
   })
 }
 
@@ -251,8 +265,28 @@ func Test_BTree_Delete_RootOneKey_NotFound(t *testing.T) {
         So(deleted, ShouldBeFalse)
       })
     })
+
+    checkTreeInvariants(btree)
   })
 }
+
+// https://www.geeksforgeeks.org/b-tree-set-3delete/
+// func Test_BTree_Delete_Scenarios(t *testing.T) {
+//   Convey("Given btree with one key", t, func() {
+//     btree := NewBTree(3)
+//
+//     Convey("When elements are deleted and key not found", func() {
+//       deleted := btree.Delete(1)
+//
+//       Convey("Root should be nil", func() {
+//         validateNode(btree.root, true, 0, []int{2})
+//         So(deleted, ShouldBeFalse)
+//       })
+//     })
+//
+//     checkTreeInvariants(btree)
+//   })
+// }
 
 func validateNode(n *node, isLeaf bool, numChildren int, keys []int)  {
   So(n.isLeaf, ShouldEqual, isLeaf)
@@ -261,6 +295,44 @@ func validateNode(n *node, isLeaf bool, numChildren int, keys []int)  {
 
   for i, key := range keys {
     So(n.keys[i], ShouldEqual, key)
+  }
+}
+
+func checkTreeInvariants(tree *BTree) {
+  checkNodeInvariants(tree.root, true)
+}
+
+func checkNodeInvariants(node *node, isRoot bool) {
+  shouldBeLessThanOrEqualTo := func(actual interface{}, expected ...interface{}) string {
+    if compare(actual, expected[0]) <= 0 {
+      return ""
+    }
+
+    return fmt.Sprintf("Expected '%v' to be less than or equal to '%v' (but it wasn't)!", actual, expected[0])
+  }
+
+  // return igf nil
+  if node == nil { return }
+
+  // check degree is correct
+  if !isRoot {
+    So(len(node.keys), ShouldBeGreaterThanOrEqualTo, node.degree - 1)
+  }
+  So(len(node.keys), ShouldBeLessThanOrEqualTo, 2 * node.degree - 1)
+
+  // check node has len(keys)+1 children or leaf
+  if len(node.children) == 0 {
+    So(node.isLeaf, ShouldBeTrue)
+  } else {
+    So(node.isLeaf, ShouldBeFalse)
+    So(len(node.keys), ShouldEqual, len(node.children) - 1)
+  }
+
+  if len(node.keys) > 1 {
+    // check keys are ordered
+    for i := 1; i < len(node.keys); i++ {
+      So(node.keys[i-1], shouldBeLessThanOrEqualTo, node.keys[i])
+    }
   }
 }
 

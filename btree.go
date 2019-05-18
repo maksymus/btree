@@ -199,7 +199,44 @@ func (n *node) deleteFromLeaf(idx int) {
 }
 
 func (n *node) deleteFromInternal(idx int) {
-  // TODO
+  getPredecessor := func() interface{} {
+    curr := n.children[idx]
+    // keep moving to the rightmost node until leaf is reached
+    for ; !curr.isLeaf ;  {
+      curr = curr.children[len(curr.children)-1]
+    }
+    // return last key
+    return curr.keys[len(curr.keys)-1]
+  }
+
+  getSuccessor := func() interface{} {
+    curr := n.children[idx+1]
+    // keep moving to the leftmost node until leaf is reached
+    for ; !curr.isLeaf ;  {
+      curr = curr.children[0]
+    }
+    // return first key
+    return curr.keys[0]
+  }
+
+  if len(n.children[idx].keys) >= n.degree {
+    // if child that precedes idx (children[idx]) has at least degree keys
+    // then find predecessor of key in children[idx] tree
+    // replace key[idx] with predecessor and delete predecessor in children[idx]
+    pred := getPredecessor()
+    n.keys[idx] = pred
+    n.children[idx].delete(pred)
+  } else if len(n.children[idx+1].keys) >= n.degree {
+    // if child that succeeds idx (children[idx+1]) has at least degree keys
+    // then find successor of key in children[idx+1] tree
+    // replace key[idx] with predecessor and delete successor in children[idx+1]
+    succ := getSuccessor()
+    n.keys[idx] = succ
+    n.children[idx+1].delete(succ)
+  } else {
+    n.merge(idx)
+    n.children[idx].delete(n.keys[idx])
+  }
 }
 
 func (n *node) fill(idx int) {
@@ -245,28 +282,6 @@ func (n *node) fill(idx int) {
     sibling.keys = sibling.keys[1:]
   }
 
-  // merge idx and idx+1 children
-  // idx+1 child is freed
-  merge := func() {
-    child := n.children[idx]
-    sibling := n.children[idx+1]
-
-    // move down idx key to child
-    child.keys = append(child.keys, child.keys[idx])
-
-    // append siblings key to child
-    child.keys = append(child.keys, sibling.keys...)
-
-    // append siblings children to child
-    if !child.isLeaf {
-      child.children = append(child.children, sibling.children...)
-    }
-
-    // remove key/child from current node
-    n.keys = append(n.keys[:idx], n.keys[idx+1:]...)
-    n.children = append(n.children[:idx+1], n.children[idx+2:]...)
-  }
-
   // ================ LOGIC starts here
   // if left child has more than (degree - 1) then borrow from left
   // else if right child has more than (degree - 1) then borrow from right
@@ -279,9 +294,32 @@ func (n *node) fill(idx int) {
     if idx >= n.degree {
       idx--
     }
-    merge()
+    n.merge(idx)
   }
 }
+
+// merge idx and idx+1 children
+// idx+1 child is freed
+func (n* node) merge(idx int) {
+  child := n.children[idx]
+  sibling := n.children[idx+1]
+
+  // move down idx key to child
+  child.keys = append(child.keys, child.keys[idx])
+
+  // append siblings key to child
+  child.keys = append(child.keys, sibling.keys...)
+
+  // append siblings children to child
+  if !child.isLeaf {
+    child.children = append(child.children, sibling.children...)
+  }
+
+  // remove key/child from current node
+  n.keys = append(n.keys[:idx], n.keys[idx+1:]...)
+  n.children = append(n.children[:idx+1], n.children[idx+2:]...)
+}
+
 
 // Search key by key
 func (n *node) search(searchKey interface{}) *node {

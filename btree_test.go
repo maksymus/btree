@@ -271,22 +271,49 @@ func Test_BTree_Delete_RootOneKey_NotFound(t *testing.T) {
 }
 
 // https://www.geeksforgeeks.org/b-tree-set-3delete/
-// func Test_BTree_Delete_Scenarios(t *testing.T) {
-//   Convey("Given btree with one key", t, func() {
-//     btree := NewBTree(3)
-//
-//     Convey("When elements are deleted and key not found", func() {
-//       deleted := btree.Delete(1)
-//
-//       Convey("Root should be nil", func() {
-//         validateNode(btree.root, true, 0, []int{2})
-//         So(deleted, ShouldBeFalse)
-//       })
-//     })
-//
-//     checkTreeInvariants(btree)
-//   })
-// }
+func Test_BTree_Delete_Scenarios(t *testing.T) {
+  createNode := func(degree int, keys []int32, children []*node) *node {
+    node, _ := newNode(degree, len(children) == 0, len(keys), len(children))
+    node.children = children
+
+    for i, key := range  keys {
+      node.keys[i] = key
+    }
+
+    return node
+  }
+
+  Convey("Given A-Z btree", t, func() {
+    btree := NewBTree(3)
+
+    btree.root = createNode(3, []int32{ 'P' }, []*node {
+      createNode(3, []int32{ 'C', 'G', 'M' }, []*node{
+        createNode(3, []int32{ 'A', 'B' }, nil),
+        createNode(3, []int32{ 'D', 'E', 'F' }, nil),
+        createNode(3, []int32{ 'J', 'K', 'L' }, nil),
+        createNode(3, []int32{ 'N', 'O' }, nil),
+      }),
+      createNode(3, []int32{ 'T', 'X' }, []*node{
+        createNode(3, []int32{ 'Q', 'R', 'S' }, nil),
+        createNode(3, []int32{ 'U', 'V' }, nil),
+        createNode(3, []int32{ 'Y', 'Z' }, nil),
+      }),
+    })
+
+    // Convey("When elements are deleted and key not found", func() {
+    //   deleted := btree.Delete(1)
+    //
+    //   Convey("Root should be nil", func() {
+    //     validateNode(btree.root, true, 0, []int{2})
+    //     So(deleted, ShouldBeFalse)
+    //   })
+    // })
+
+    checkTreeInvariants(btree)
+  })
+}
+
+// Helper functions ===============================================================================================
 
 func validateNode(n *node, isLeaf bool, numChildren int, keys []int)  {
   So(n.isLeaf, ShouldEqual, isLeaf)
@@ -355,6 +382,7 @@ func checkNodeInvariants(node *node, isRoot bool) {
   }
 }
 
+// Test structure ==============================================================================================
 type TestKey struct {
   i int
 }

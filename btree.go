@@ -455,6 +455,16 @@ func compare(i1 interface{}, i2 interface{}) int {
     return 0
   }
 
+  if _, ok := i1.(int32); ok {
+    if i1.(int32) < i2.(int32) {
+      return -1
+    } else if i1.(int32) > i2.(int32) {
+      return 1
+    }
+
+    return 0
+  }
+
   if _, ok := i1.(float32); ok {
     if i1.(float32) < i2.(float32) {
       return -1

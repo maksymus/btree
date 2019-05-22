@@ -307,32 +307,51 @@ func checkNodeInvariants(node *node, isRoot bool) {
     if compare(actual, expected[0]) <= 0 {
       return ""
     }
-
     return fmt.Sprintf("Expected '%v' to be less than or equal to '%v' (but it wasn't)!", actual, expected[0])
   }
 
-  // return igf nil
-  if node == nil { return }
+  // return if nil
+  if node == nil {
+    return
+  }
 
   // check degree is correct
   if !isRoot {
-    So(len(node.keys), ShouldBeGreaterThanOrEqualTo, node.degree - 1)
+    So(len(node.keys), ShouldBeGreaterThanOrEqualTo, node.degree-1)
   }
-  So(len(node.keys), ShouldBeLessThanOrEqualTo, 2 * node.degree - 1)
+  So(len(node.keys), ShouldBeLessThanOrEqualTo, 2*node.degree-1)
+
+  // check keys are ordered
+  if len(node.keys) > 1 {
+    for i := 1; i < len(node.keys); i++ {
+      So(node.keys[i-1], shouldBeLessThanOrEqualTo, node.keys[i])
+    }
+  }
 
   // check node has len(keys)+1 children or leaf
   if len(node.children) == 0 {
     So(node.isLeaf, ShouldBeTrue)
   } else {
     So(node.isLeaf, ShouldBeFalse)
-    So(len(node.keys), ShouldEqual, len(node.children) - 1)
+    So(len(node.keys), ShouldEqual, len(node.children)-1)
   }
 
-  if len(node.keys) > 1 {
-    // check keys are ordered
-    for i := 1; i < len(node.keys); i++ {
-      So(node.keys[i-1], shouldBeLessThanOrEqualTo, node.keys[i])
+  // check child keys are grater/equal than previous key and less/equal than next key
+  for i, child := range node.children {
+    if i > 0 {
+      prevKey := node.keys[i-1]
+      So(prevKey, shouldBeLessThanOrEqualTo, child.keys[0])
     }
+
+    if i < len(node.children)-1 {
+      nextKey := node.keys[i]
+      So(child.keys[len(child.keys)-1], shouldBeLessThanOrEqualTo, nextKey)
+    }
+  }
+
+  // validate each child recursively
+  for _, child := range node.children {
+    checkNodeInvariants(child, false)
   }
 }
 

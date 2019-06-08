@@ -176,10 +176,9 @@ func (n *node) delete(key interface{}) bool {
       return false
     }
 
-    // num of key in node should be more than (degree - 1)
-    // if number of keys is less/equals to degree - 1)
-    // then borrow key from left/right neighbour or merge
-    if len(n.keys) < n.degree {
+    // if number of keys is child node where the key is supposed to be
+    // is less/equals to degree - 1 then borrow key from left/right neighbour or merge
+    if len(n.children[idx].keys) < n.degree {
       n.fill(idx)
     }
 

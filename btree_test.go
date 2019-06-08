@@ -284,38 +284,70 @@ func Test_BTree_Delete_Scenarios(t *testing.T) {
   }
 
   Convey("Given A-Z btree", t, func() {
-    btree := NewBTree(3)
+    degree := 3
 
-    btree.root = createNode(3, []int32{ 'P' }, []*node {
-      createNode(3, []int32{ 'C', 'G', 'M' }, []*node{
-        createNode(3, []int32{ 'A', 'B' }, nil),
-        createNode(3, []int32{ 'D', 'E', 'F' }, nil),
-        createNode(3, []int32{ 'J', 'K', 'L' }, nil),
-        createNode(3, []int32{ 'N', 'O' }, nil),
+    btree := NewBTree(uint(degree))
+
+    btree.root = createNode(degree, []int32{'P' }, []*node {
+      createNode(degree, []int32{'C', 'G', 'M' }, []*node{
+        createNode(degree, []int32{'A', 'B' }, nil),
+        createNode(degree, []int32{'D', 'E', 'F' }, nil),
+        createNode(degree, []int32{'J', 'K', 'L' }, nil),
+        createNode(degree, []int32{'N', 'O' }, nil),
       }),
-      createNode(3, []int32{ 'T', 'X' }, []*node{
-        createNode(3, []int32{ 'Q', 'R', 'S' }, nil),
-        createNode(3, []int32{ 'U', 'V' }, nil),
-        createNode(3, []int32{ 'Y', 'Z' }, nil),
+      createNode(degree, []int32{'T', 'X' }, []*node{
+        createNode(degree, []int32{'Q', 'R', 'S' }, nil),
+        createNode(degree, []int32{'U', 'V' }, nil),
+        createNode(degree, []int32{'Y', 'Z' }, nil),
       }),
     })
-
-    // Convey("When elements are deleted and key not found", func() {
-    //   deleted := btree.Delete(1)
-    //
-    //   Convey("Root should be nil", func() {
-    //     validateNode(btree.root, true, 0, []int{2})
-    //     So(deleted, ShouldBeFalse)
-    //   })
-    // })
-
     checkTreeInvariants(btree)
+
+    // Delete F - delete key from leaf
+    Convey("When F is deleted ", func() {
+      deleted := btree.Delete('F')
+
+      Convey("Root should be nil", func() {
+        child1, child2 := btree.root.children[0], btree.root.children[1]
+        child11, child12, child13, child14 := child1.children[0], child1.children[1], child1.children[2], child1.children[3]
+        child21, child22, child23 := child2.children[0], child2.children[1], child2.children[2]
+
+        So(deleted, ShouldBeTrue)
+
+        validateNodeChar(btree.root, false, 2, []int32{ 'P' })
+
+        validateNodeChar(child1, false, 4, []int32{ 'C', 'G', 'M' })
+        validateNodeChar(child2, false, 3, []int32{ 'T', 'X' })
+
+        validateNodeChar(child11, true, 0, []int32{ 'A', 'B' })
+        validateNodeChar(child12, true, 0, []int32{ 'D', 'E' })
+        validateNodeChar(child13, true, 0, []int32{ 'J', 'K', 'L' })
+        validateNodeChar(child14, true, 0, []int32{ 'N', 'O' })
+        validateNodeChar(child21, true, 0, []int32{ 'Q', 'R', 'S' })
+        validateNodeChar(child22, true, 0, []int32{ 'U', 'V' })
+        validateNodeChar(child23, true, 0, []int32{ 'Y', 'Z' })
+      })
+
+      checkTreeInvariants(btree)
+    })
+
+    // TODO add more scenarios
   })
 }
 
 // Helper functions ===============================================================================================
 
 func validateNode(n *node, isLeaf bool, numChildren int, keys []int)  {
+  So(n.isLeaf, ShouldEqual, isLeaf)
+  So(len(n.keys), ShouldEqual, len(keys))
+  So(len(n.children), ShouldEqual, numChildren)
+
+  for i, key := range keys {
+    So(n.keys[i], ShouldEqual, key)
+  }
+}
+
+func validateNodeChar(n *node, isLeaf bool, numChildren int, keys []int32)  {
   So(n.isLeaf, ShouldEqual, isLeaf)
   So(len(n.keys), ShouldEqual, len(keys))
   So(len(n.children), ShouldEqual, numChildren)
@@ -388,17 +420,30 @@ type TestKey struct {
 }
 
 func (tk TestKey) Compare(other interface{}) int {
-  if o, ok := other.(*TestKey); ok {
-    if tk.i < o.i {
+  var otherTk *TestKey
+
+  if reflect.ValueOf(other).Kind() == reflect.Ptr {
+    if o, ok := other.(*TestKey); ok {
+      otherTk = o
+    }
+  } else {
+    if o, ok := other.(TestKey); ok {
+      otherTk = &o
+    }
+  }
+
+  if otherTk != nil {
+    if tk.i < otherTk.i {
       return -1
     }
 
-    if tk.i > o.i {
+    if tk.i > otherTk.i {
       return 1
     }
 
     return 0
   }
+
 
   panic(fmt.Sprintf("cannot compare TestKey to %v", reflect.TypeOf(other)))
 }

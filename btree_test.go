@@ -304,10 +304,10 @@ func Test_BTree_Delete_Scenarios(t *testing.T) {
     checkTreeInvariants(btree)
 
     // Delete F - delete key from leaf
-    Convey("When F is deleted ", func() {
+    Convey("When F is deleted", func() {
       deleted := btree.Delete('F')
 
-      Convey("Root should be nil", func() {
+      Convey("Validate tree- key deleted from leaf node", func() {
         child1, child2 := btree.root.children[0], btree.root.children[1]
         child11, child12, child13, child14 := child1.children[0], child1.children[1], child1.children[2], child1.children[3]
         child21, child22, child23 := child2.children[0], child2.children[1], child2.children[2]
@@ -330,6 +330,66 @@ func Test_BTree_Delete_Scenarios(t *testing.T) {
 
       checkTreeInvariants(btree)
     })
+
+
+    // Delete M - delete key from internal node
+    Convey("When M is deleted ", func() {
+      deleted := btree.Delete('F')
+      deleted = btree.Delete('M')
+
+      Convey("Validate tree - key deleted from internal node with enough capacity (no merge/fill)", func() {
+        child1, child2 := btree.root.children[0], btree.root.children[1]
+        child11, child12, child13, child14 := child1.children[0], child1.children[1], child1.children[2], child1.children[3]
+        child21, child22, child23 := child2.children[0], child2.children[1], child2.children[2]
+
+        So(deleted, ShouldBeTrue)
+
+        validateNodeChar(btree.root, false, 2, []int32{ 'P' })
+
+        validateNodeChar(child1, false, 4, []int32{ 'C', 'G', 'L' })
+        validateNodeChar(child2, false, 3, []int32{ 'T', 'X' })
+
+        validateNodeChar(child11, true, 0, []int32{ 'A', 'B' })
+        validateNodeChar(child12, true, 0, []int32{ 'D', 'E' })
+        validateNodeChar(child13, true, 0, []int32{ 'J', 'K' })
+        validateNodeChar(child14, true, 0, []int32{ 'N', 'O' })
+        validateNodeChar(child21, true, 0, []int32{ 'Q', 'R', 'S' })
+        validateNodeChar(child22, true, 0, []int32{ 'U', 'V' })
+        validateNodeChar(child23, true, 0, []int32{ 'Y', 'Z' })
+      })
+
+      checkTreeInvariants(btree)
+    })
+
+    Convey("When G is deleted ", func() {
+      deleted := btree.Delete('F')
+      deleted = btree.Delete('M')
+      deleted = btree.Delete('G')
+
+      Convey("Validate tree - key deleted from internal node with merge", func() {
+        child1, child2 := btree.root.children[0], btree.root.children[1]
+        child11, child12, child13 := child1.children[0], child1.children[1], child1.children[2]
+        child21, child22, child23 := child2.children[0], child2.children[1], child2.children[2]
+
+        So(deleted, ShouldBeTrue)
+
+        validateNodeChar(btree.root, false, 2, []int32{ 'P' })
+
+        validateNodeChar(child1, false, 3, []int32{ 'C', 'L' })
+        validateNodeChar(child2, false, 3, []int32{ 'T', 'X' })
+
+        validateNodeChar(child11, true, 0, []int32{ 'A', 'B' })
+        validateNodeChar(child12, true, 0, []int32{ 'D', 'E', 'J', 'K' })
+        validateNodeChar(child13, true, 0, []int32{ 'N', 'O' })
+        validateNodeChar(child21, true, 0, []int32{ 'Q', 'R', 'S' })
+        validateNodeChar(child22, true, 0, []int32{ 'U', 'V' })
+        validateNodeChar(child23, true, 0, []int32{ 'Y', 'Z' })
+      })
+
+      checkTreeInvariants(btree)
+    })
+
+
 
     // TODO add more scenarios
   })

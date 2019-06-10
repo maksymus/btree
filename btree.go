@@ -303,8 +303,8 @@ func (n* node) merge(idx int) {
   child := n.children[idx]
   sibling := n.children[idx+1]
 
-  // move down idx key to child
-  child.keys = append(child.keys, child.keys[idx])
+  // // move down idx key to child
+  // child.keys = append(child.keys, n.keys[idx])
 
   // append siblings key to child
   child.keys = append(child.keys, sibling.keys...)

@@ -390,6 +390,33 @@ func Test_BTree_Delete_Scenarios(t *testing.T) {
     })
 
 
+    Convey("When D is deleted ", func() {
+      deleted := btree.Delete('F')
+      deleted = btree.Delete('M')
+      deleted = btree.Delete('G')
+      deleted = btree.Delete('D')
+
+      Convey("Validate tree - key deleted with merge/shrink", func() {
+        children := btree.root.children
+
+        child1, child2, child3, child4, child5, child6 :=
+          children[0], children[1], children[2], children[3], children[4], children[5]
+
+        So(deleted, ShouldBeTrue)
+
+        validateNodeChar(btree.root, false, 6, []int32{ 'C', 'L', 'P', 'T', 'X'})
+
+        validateNodeChar(child1, true, 0, []int32{ 'A', 'B' })
+        validateNodeChar(child2, true, 0, []int32{ 'E', 'J', 'K' })
+        validateNodeChar(child3, true, 0, []int32{ 'N', 'O' })
+        validateNodeChar(child4, true, 0, []int32{ 'Q', 'R', 'S' })
+        validateNodeChar(child5, true, 0, []int32{ 'U', 'V' })
+        validateNodeChar(child6, true, 0, []int32{ 'Y', 'Z' })
+      })
+
+      checkTreeInvariants(btree)
+    })
+
 
     // TODO add more scenarios
   })

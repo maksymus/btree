@@ -233,8 +233,10 @@ func (n *node) deleteFromInternal(idx int) {
     n.keys[idx] = succ
     n.children[idx+1].delete(succ)
   } else {
+    key := n.keys[idx]
+    // merge nodes and move keys[idx] key down as median of merged nodes
     n.merge(idx)
-    n.children[idx].delete(n.keys[idx])
+    n.children[idx].delete(key)
   }
 }
 
@@ -303,8 +305,8 @@ func (n* node) merge(idx int) {
   child := n.children[idx]
   sibling := n.children[idx+1]
 
-  // // move down idx key to child
-  // child.keys = append(child.keys, n.keys[idx])
+  // move down idx key to child
+  child.keys = append(child.keys, n.keys[idx])
 
   // append siblings key to child
   child.keys = append(child.keys, sibling.keys...)

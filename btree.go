@@ -270,7 +270,7 @@ func (n *node) fill(idx int) {
     sibling := n.children[idx+1]
 
     // move down current node's idx+1 key to child last key
-    child.keys = append(child.keys, n.keys[idx+1])
+    child.keys = append(child.keys, n.keys[idx])
 
     // move sibling's fist child to child's last child
     if !child.isLeaf {
@@ -279,7 +279,7 @@ func (n *node) fill(idx int) {
     }
 
     // moving up siblings first key to current node's idx+1
-    n.keys[idx+1] = sibling.keys[0]
+    n.keys[idx] = sibling.keys[0]
     sibling.keys = sibling.keys[1:]
   }
 

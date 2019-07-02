@@ -6,9 +6,8 @@ import (
   "fmt"
   "os"
 
-  "github.com/hashicorp/go-multierror"
-  log "github.com/sirupsen/logrus"
   "btree/errors"
+  log "github.com/sirupsen/logrus"
 )
 
 // https://xml.apache.org/xindice/dev/guide-internals.html#3.+Data+storage
@@ -31,9 +30,10 @@ func init() {
   log.SetFormatter(&log.TextFormatter{
     FullTimestamp: true,
   })
-  log.SetReportCaller(true)
+  // log.SetReportCaller(true)
 }
 
+// Paged Config
 type Config struct {
   headerSize     int16 // header size
   pageSize       int32 // page size
@@ -42,6 +42,7 @@ type Config struct {
   pageHeaderSize int8  // page header size
 }
 
+// Default paged config
 func DefaultConfig() Config {
   return Config{
     headerSize:     DefaultHeaderSize,
@@ -52,6 +53,7 @@ func DefaultConfig() Config {
   }
 }
 
+// paged abstraction for paged file
 type paged struct {
   isOpen   bool
   filename string
@@ -62,6 +64,7 @@ type paged struct {
   fileHeader *fileHeader
 }
 
+// create new paged
 func newPaged(filename string, config Config) (*paged, error) {
   paged := &paged{}
   paged.filename = filename
@@ -71,21 +74,24 @@ func newPaged(filename string, config Config) (*paged, error) {
   return paged, nil
 }
 
+// try to read paged file or create if file doesn't exists
+// returns error in following cases
+// - file exists but not readable (format broken)
+// - file doesn't exist and failed to create file
 func (paged *paged) open() error {
   if paged.isOpen {
     return errors.New("paged already opened")
   }
 
-  var file *os.File
   var errors error
 
-  if file, errors = os.OpenFile(paged.filename, os.O_RDWR, 0666); errors == nil {
+  if paged.file, errors = os.OpenFile(paged.filename, os.O_RDWR, 0666); errors == nil {
     if errors = paged.read(); errors != nil {
       log.WithError(errors).Panic("failed to read file")
     }
   } else if os.IsNotExist(errors) {
-    if file, errors = os.OpenFile(paged.filename, os.O_RDWR | os.O_CREATE, 0666); errors != nil {
-      log.WithError(errors).Panic("failed to create file")
+    if paged.file, errors = os.OpenFile(paged.filename, os.O_RDWR | os.O_CREATE, 0666); errors != nil {
+      log.WithError(errors).Panic("failed to open file for creation")
     }
 
     if errors = paged.create(); errors != nil {
@@ -96,28 +102,39 @@ func (paged *paged) open() error {
   }
 
   paged.isOpen = true
-  paged.file = file
   return nil
 }
 
+// close paged file
 func (paged *paged) close() error {
   if !paged.isOpen {
     return fmt.Errorf("file is not open")
   }
 
   if err := paged.flush(); err != nil {
-    return err
+    return errors.Wrap(err)
   }
 
   if err := paged.file.Close(); err != nil {
-    return err
+    return errors.Wrap(err)
   }
 
   paged.isOpen = false
   return nil
 }
 
+// create paged file and populate file header
 func (paged *paged) create() error {
+  paged.fileHeader = newFileHeader(paged.config)
+
+  if err := paged.write(); err != nil {
+    return errors.Wrap(err)
+  }
+
+  if err := paged.flush(); err != nil {
+    return errors.Wrap(err)
+  }
+
   return nil
 }
 
@@ -125,6 +142,7 @@ func (paged *paged) flush() error {
   return nil
 }
 
+// read paged file header
 func (paged *paged) read() error {
   var fh *fileHeader
 
@@ -137,11 +155,12 @@ func (paged *paged) read() error {
   return nil
 }
 
+// write paged file header
 func (paged *paged) write() error {
-  return nil
+  return write(paged, 0, paged.fileHeader)
 }
 
-
+// get page by page number
 func (paged *paged) getPage(pageNum int64) (*page, error) {
   if pageNum < 0 {
     return nil, errors.New("negative page number")
@@ -154,6 +173,32 @@ func (paged *paged) getPage(pageNum int64) (*page, error) {
   }
 
   return page, nil
+}
+
+// read page value
+// iterates over pages if value spans through several pages
+func (paged *paged) readValue(page *page) (*Value, error) {
+  recordLength := page.pageHeader.RecordLength
+  buffer := bytes.NewBuffer(make([]byte, recordLength))
+
+  currentPage := page
+
+  for {
+    // TODO read bytes
+    // buffer.Write()
+
+    if  currentPage.pageHeader.NextPage == NoPage {
+      break;
+    }
+
+    if nextPage, err := paged.getPage(currentPage.pageHeader.NextPage); err == nil {
+      currentPage = nextPage
+    } else {
+      return nil, errors.Wrap(err)
+    }
+  }
+
+  return &Value{data: buffer.Bytes()}, nil
 }
 
 // The paged file header consists of a number of fixed-length fields. Fields which are longer than one byte, are always
@@ -182,6 +227,7 @@ func newFileHeader(config Config) *fileHeader {
   }
 }
 
+// write data to paged file starting from offset
 func write(p *paged, offset int64, data interface{}) error {
   var err error
 
@@ -190,9 +236,10 @@ func write(p *paged, offset int64, data interface{}) error {
     _, err = p.file.WriteAt(buf.Bytes(), offset)
   }
 
-  return err
+  return errors.Wrap(err)
 }
 
+// read data from paged file starting from offset
 func read(p *paged, offset int64, size uint32, data interface{}) error {
   var err error
 
@@ -201,88 +248,6 @@ func read(p *paged, offset int64, size uint32, data interface{}) error {
     err = binary.Read(bytes.NewBuffer(bs), binary.BigEndian, data)
   }
 
-  return err
+  return errors.Wrap(err)
 }
 
-// Each page contains a 64-byte header, followed by actual data. Pages are numbered.
-// Whenever a particular page, say page n is needed, but not yet loaded into memory, the code can calculate the start
-// address of the page as:
-//
-// offset = fileHeaderSize + (n * pageSize)
-//
-// At this address, it will then find the header of the wanted page, and 64 bytes further, the start of the page's data.
-type pageHeader struct {
-  Status       int8  // status (1 byte): pages in the data file are either used or unused. Used pages contain actual data.
-  KeyLength    int16 // key length (2 bytes): pages have the possibility of storing a key just before their actual data.
-  KeyHash      int16 // key hash (4 bytes): As the name suggests, this field stores a 32-bit hash value calculated from the key.
-  DataLength   int32 // data len (4 bytes): The length of the data stored in this page.
-  RecordLength int32 // record len (4 bytes): the total length of the data record of which part is stored in this page.
-  NextPage     int64 // next page (8 bytes): page number of the page that contains subsequent data for the record stored in this page, if more data is available.
-}
-
-func newPageHeader(config Config) *pageHeader {
-  return &pageHeader{}
-}
-
-type page struct {
-  pageNumber int64
-  offset     int64
-
-  paged      *paged
-  pageHeader *pageHeader
-
-  data []byte
-}
-
-func newPage(paged *paged, pageNumber int64) *page {
-  fileHeader := paged.fileHeader
-
-  page := page{}
-
-  page.paged = paged
-  page.pageHeader = newPageHeader(paged.config)
-  page.pageNumber = pageNumber
-  page.offset = int64(fileHeader.HeaderSize) +
-    (int64(pageNumber) * int64(fileHeader.PageSize))
-
-  return &page
-}
-
-func (page *page) read() error {
-  if len(page.data) > 0 {
-    return nil
-  }
-
-  pageHeaderSize := page.paged.fileHeader.PageHeaderSize
-  pageSize := page.paged.fileHeader.PageSize
-  pageDataOffset := page.offset + int64(pageHeaderSize)
-  pageDataSize := pageSize - int32(pageHeaderSize)
-
-  var errors error
-
-  if err := read(page.paged, page.offset, uint32(pageHeaderSize), page.pageHeader); err != nil {
-    multierror.Append(errors, err)
-  }
-
-  if err := read(page.paged, pageDataOffset, uint32(pageDataSize), page.data); err != nil {
-    multierror.Append(errors, err)
-  }
-
-  return errors
-}
-
-func (page *page) write() error {
-  dataOffset := int64(page.offset) + int64(page.paged.fileHeader.PageHeaderSize)
-
-  var errors error
-
-  if err := write(page.paged, int64(page.offset), page.pageHeader); err != nil {
-    multierror.Append(errors, err)
-  }
-
-  if err := write(page.paged, dataOffset, &page.data); err != nil {
-    multierror.Append(errors, err)
-  }
-
-  return errors
-}

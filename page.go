@@ -1,6 +1,10 @@
 package main
 
-import "github.com/hashicorp/go-multierror"
+import (
+  "btree/errors"
+  "bytes"
+  "github.com/hashicorp/go-multierror"
+)
 
 const (
   NoPage = -1
@@ -50,6 +54,7 @@ func newPage(paged *paged, pageNumber int64) *page {
   return &page
 }
 
+// read page header and page data
 func (page *page) read() error {
   if len(page.data) > 0 {
     return nil
@@ -73,6 +78,7 @@ func (page *page) read() error {
   return errors
 }
 
+// write page header and page data
 func (page *page) write() error {
   dataOffset := int64(page.offset) + int64(page.paged.fileHeader.PageHeaderSize)
 
@@ -87,4 +93,17 @@ func (page *page) write() error {
   }
 
   return errors
+}
+
+// write page data to buffer
+func (page *page) streamTo(buffer *bytes.Buffer) error {
+  ph := page.pageHeader
+
+  if ph.DataLength > 0 {
+    if _, err := buffer.Write(page.data[:ph.DataLength]); err != nil {
+      return errors.Wrap(err)
+    }
+  }
+
+  return nil
 }

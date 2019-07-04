@@ -18,41 +18,6 @@ import (
 // If data that must be stored is longer than the length of one page, subsequent pages in the file can be "linked" to the first.
 // The file header is 4kb long, and each page is, by default, 4kb long.
 
-const (
-  DefaultHeaderSize     = 1024 * 4
-  DefaultPageSize       = 1024 * 4
-  DefaultPageCount      = 1024
-  DefaultMaxKeySize     = 256
-  DefaultPageHeaderSize = 64
-)
-
-func init() {
-  log.SetFormatter(&log.TextFormatter{
-    FullTimestamp: true,
-  })
-  // log.SetReportCaller(true)
-}
-
-// Paged Config
-type Config struct {
-  headerSize     int16 // header size
-  pageSize       int32 // page size
-  pageCount      int64 // init page count
-  maxKeySize     int16 // max key size
-  pageHeaderSize int8  // page header size
-}
-
-// Default paged config
-func DefaultConfig() Config {
-  return Config{
-    headerSize:     DefaultHeaderSize,
-    pageSize:       DefaultPageSize,
-    pageCount:      DefaultPageCount,
-    maxKeySize:     DefaultMaxKeySize,
-    pageHeaderSize: DefaultPageHeaderSize,
-  }
-}
-
 // paged abstraction for paged file
 type paged struct {
   isOpen   bool
@@ -184,8 +149,9 @@ func (paged *paged) readValue(page *page) (*Value, error) {
   currentPage := page
 
   for {
-    // TODO read bytes
-    // buffer.Write()
+    if err := page.streamTo(buffer); err != nil {
+      return nil, err
+    }
 
     if  currentPage.pageHeader.NextPage == NoPage {
       break;
@@ -194,11 +160,16 @@ func (paged *paged) readValue(page *page) (*Value, error) {
     if nextPage, err := paged.getPage(currentPage.pageHeader.NextPage); err == nil {
       currentPage = nextPage
     } else {
-      return nil, errors.Wrap(err)
+      return nil, err
     }
   }
 
   return &Value{data: buffer.Bytes()}, nil
+}
+
+// write value to page or pages
+func (paged *paged) writeValue(page *page, value *Value) error {
+  return nil
 }
 
 // The paged file header consists of a number of fixed-length fields. Fields which are longer than one byte, are always

@@ -4,6 +4,7 @@ import (
   "bytes"
   "encoding/binary"
   "fmt"
+  "io"
   "os"
 
   "btree/errors"
@@ -109,14 +110,14 @@ func (paged *paged) flush() error {
 
 // read paged file header
 func (paged *paged) read() error {
-  var fh *fileHeader
+  var fh fileHeader
 
-  if err := read(paged, 0, uint32(paged.fileHeader.HeaderSize), fh); err != nil {
+  if err := read(paged, 0, uint32(paged.fileHeader.HeaderSize), &fh); err != nil {
     return errors.WrapMsg(err, "failed to read page header")
   }
 
-  paged.fileHeader = fh
-  paged.fileHeader.dirty = false
+  paged.fileHeader = &fh
+  paged.fileHeader.Dirty = false
   return nil
 }
 
@@ -169,7 +170,7 @@ func (paged *paged) readValue(page *page) (*Value, error) {
 
 // write value to page or pages
 func (paged *paged) writeValue(page *page, value *Value) error {
-  return nil
+  panic("implement me")
 }
 
 // The paged file header consists of a number of fixed-length fields. Fields which are longer than one byte, are always
@@ -185,7 +186,7 @@ type fileHeader struct {
   MaxKeySize     int16
   RecordCount    int64 // record count (8 bytes): number of records stored in this file.
 
-  dirty bool
+  Dirty bool
 }
 
 func newFileHeader(config Config) *fileHeader {
@@ -212,13 +213,17 @@ func write(p *paged, offset int64, data interface{}) error {
 
 // read data from paged file starting from offset
 func read(p *paged, offset int64, size uint32, data interface{}) error {
-  var err error
-
   bs := make([]byte, size)
-  if _, err = p.file.ReadAt(bs, offset); err == nil {
-    err = binary.Read(bytes.NewBuffer(bs), binary.BigEndian, data)
+  if _, err := p.file.ReadAt(bs, offset); err != nil {
+    if err != io.EOF {
+      return errors.Wrap(err)
+    }
   }
 
-  return errors.Wrap(err)
+  if err := binary.Read(bytes.NewBuffer(bs), binary.BigEndian, data); err != nil {
+    return errors.Wrap(err)
+  }
+
+  return nil
 }
 

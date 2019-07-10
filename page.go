@@ -30,14 +30,15 @@ func newPageHeader(config Config) *pageHeader {
   return &pageHeader{}
 }
 
+// page stores page info and page data
 type page struct {
-  pageNumber int64
-  offset     int64
+  pageNumber int64 // page number
+  offset     int64 // overall page offset if paged file
 
-  paged      *paged
-  pageHeader *pageHeader
+  paged      *paged      // reference to paged file
+  pageHeader *pageHeader // page header with page info
 
-  data []byte
+  data []byte // data stores key and value or value only if key is missing
 }
 
 func newPage(paged *paged, pageNumber int64) *page {
@@ -54,7 +55,7 @@ func newPage(paged *paged, pageNumber int64) *page {
   return &page
 }
 
-// read page header and page data
+// read page header and page data from paged file
 func (page *page) read() error {
   if len(page.data) > 0 {
     return nil
@@ -78,7 +79,7 @@ func (page *page) read() error {
   return errors
 }
 
-// write page header and page data
+// write page header and page data to paged file
 func (page *page) write() error {
   dataOffset := int64(page.offset) + int64(page.paged.fileHeader.PageHeaderSize)
 
@@ -106,4 +107,17 @@ func (page *page) streamTo(buffer *bytes.Buffer) error {
   }
 
   return nil
+}
+
+// read data from buffer
+func (page *page) streamFrom(buffer *bytes.Buffer) error {
+  panic("implement me")
+}
+
+func (page *page) getKey() (*Value, error) {
+  panic("implement me")
+}
+
+func (page *page) setKey(value *Value) error {
+  panic("implement me")
 }

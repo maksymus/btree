@@ -28,6 +28,10 @@ func New(msg string) error {
 
 // wrap existing error adding trace
 func Wrap(err error) error {
+  if err == nil {
+    return nil
+  }
+
   return &withTrace{
     msg:   err.Error(),
     stack: trace(),
@@ -37,6 +41,10 @@ func Wrap(err error) error {
 
 // wrap existing error adding message and trace
 func WrapMsg(err error, msg string) error {
+  if err == nil {
+    return nil
+  }
+
   return &withTrace{
     msg:   msg,
     stack: trace(),

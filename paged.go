@@ -112,12 +112,11 @@ func (paged *paged) flush() error {
 func (paged *paged) read() error {
   var fh fileHeader
 
-  if err := read(paged, 0, uint32(paged.fileHeader.HeaderSize), &fh); err != nil {
+  if err := read(paged, 0, uint32(paged.config.headerSize), &fh); err != nil {
     return errors.WrapMsg(err, "failed to read page header")
   }
 
   paged.fileHeader = &fh
-  paged.fileHeader.Dirty = false
   return nil
 }
 
@@ -154,23 +153,66 @@ func (paged *paged) readValue(page *page) (*Value, error) {
       return nil, err
     }
 
-    if  currentPage.pageHeader.NextPage == NoPage {
-      break;
+    nextPageNum := currentPage.pageHeader.NextPage
+    if nextPageNum == NoPage {
+      break
     }
 
-    if nextPage, err := paged.getPage(currentPage.pageHeader.NextPage); err == nil {
+    if nextPage, err := paged.getPage(nextPageNum); err == nil {
       currentPage = nextPage
     } else {
       return nil, err
     }
   }
 
-  return &Value{data: buffer.Bytes()}, nil
+  // return &Value{data: buffer.Bytes()}, nil
+  return NewValue(buffer.Bytes(), 0, buffer.Len()), nil
 }
 
 // write value to page or pages
 func (paged *paged) writeValue(page *page, value *Value) error {
-  panic("implement me")
+  pageHeader := page.pageHeader
+  pageHeader.RecordLength = int32(value.len)
+
+  buffer := value.Buffer()
+
+  // if more data left in buffer then write to page
+  for buffer.Len() > 0 {
+    pageHeader := page.pageHeader
+
+    if err := page.streamFrom(buffer); err != nil {
+      return err
+    }
+
+    // write current page
+    if err := page.write(); err != nil {
+      return err
+    }
+
+    // if no more data to write then break
+    if buffer.Len() > 0 {
+      break
+    }
+
+    if nextPageNum := pageHeader.NextPage; nextPageNum == NoPage {
+      // TODO get free page
+    } else {
+      if nextPage, err := paged.getPage(nextPageNum); err == nil {
+        page = nextPage
+      } else {
+        return err
+      }
+    }
+  }
+
+  // clean up unused overflow pages
+  if page.pageHeader.NextPage != NoPage {
+    // TODO unlink pages
+  }
+
+  page.pageHeader.NextPage = NoPage
+
+  return nil
 }
 
 // The paged file header consists of a number of fixed-length fields. Fields which are longer than one byte, are always
@@ -185,8 +227,6 @@ type fileHeader struct {
   PageHeaderSize int8  // page header size (1 byte): size of each page header. Set to 64 (0x40) by default.
   MaxKeySize     int16
   RecordCount    int64 // record count (8 bytes): number of records stored in this file.
-
-  Dirty bool
 }
 
 func newFileHeader(config Config) *fileHeader {

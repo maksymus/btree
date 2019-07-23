@@ -1,15 +1,19 @@
 package main
 
-import "hash/fnv"
+import (
+  "bytes"
+  "hash/fnv"
+)
 
 type Value struct {
   data []byte
-  pos  uint
-  len  uint
+  pos  int
+  len  int
   hash int
 }
 
-func NewValue(bs []byte, pos uint, len uint) *Value {
+// create new value
+func NewValue(bs []byte, pos int, len int) *Value {
   hash32 := fnv.New32()
   hash32.Write(bs)
 
@@ -21,6 +25,7 @@ func NewValue(bs []byte, pos uint, len uint) *Value {
   }
 }
 
-func (value Value) ByteAt(pos uint) byte {
-  return (value.data)[pos]
+// buffer from value
+func (value *Value) Buffer() *bytes.Buffer {
+  return bytes.NewBuffer(value.data[value.pos : value.pos+value.len])
 }

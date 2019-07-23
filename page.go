@@ -101,7 +101,7 @@ func (page *page) streamTo(buffer *bytes.Buffer) error {
   ph := page.pageHeader
 
   if ph.DataLength > 0 {
-    if _, err := buffer.Write(page.data[:ph.DataLength]); err != nil {
+    if _, err := buffer.Write(page.data[ph.KeyLength:]); err != nil {
       return errors.Wrap(err)
     }
   }
@@ -109,9 +109,27 @@ func (page *page) streamTo(buffer *bytes.Buffer) error {
   return nil
 }
 
-// read data from buffer
+// read data from buffer to page
 func (page *page) streamFrom(buffer *bytes.Buffer) error {
-  panic("implement me")
+  fileHeader := page.paged.fileHeader
+  pageHeader := page.pageHeader
+
+  // get key/data size of page
+  workSize := fileHeader.PageSize - int32(fileHeader.PageHeaderSize)
+
+  // set data length based on length of data in buffer
+  bufferLength  := int32(buffer.Len())
+  page.pageHeader.DataLength = workSize - int32(pageHeader.KeyLength)
+  if bufferLength < page.pageHeader.DataLength {
+    page.pageHeader.DataLength = bufferLength
+  }
+
+  // read data from buffer
+  if _, err := buffer.Read(page.data[page.pageHeader.KeyLength:]); err != nil {
+    return err
+  }
+
+  return nil
 }
 
 func (page *page) getKey() (*Value, error) {

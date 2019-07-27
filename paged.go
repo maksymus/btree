@@ -1,9 +1,11 @@
 package main
 
 import (
+  "btree/stream"
   "bytes"
   "encoding/binary"
   "fmt"
+  "github.com/hashicorp/go-multierror"
   "io"
   "os"
 
@@ -25,19 +27,15 @@ type paged struct {
   filename string
   file     *os.File
 
-  config Config
-
   fileHeader *fileHeader
 }
 
 // create new paged
-func newPaged(filename string, config Config) (*paged, error) {
-  paged := &paged{}
-  paged.filename = filename
-  paged.config = config
-  paged.fileHeader = newFileHeader(config)
-
-  return paged, nil
+func newPaged(filename string, config Config) *paged {
+  return &paged{
+    filename:   filename,
+    fileHeader: newFileHeader(config),
+  }
 }
 
 // try to read paged file or create if file doesn't exists
@@ -91,8 +89,6 @@ func (paged *paged) close() error {
 
 // create paged file and populate file header
 func (paged *paged) create() error {
-  paged.fileHeader = newFileHeader(paged.config)
-
   if err := paged.write(); err != nil {
     return errors.Wrap(err)
   }
@@ -112,7 +108,7 @@ func (paged *paged) flush() error {
 func (paged *paged) read() error {
   var fh fileHeader
 
-  if err := read(paged, 0, uint32(paged.config.headerSize), &fh); err != nil {
+  if err := read(paged, 0, uint32(paged.fileHeader.PageHeaderSize), &fh); err != nil {
     return errors.WrapMsg(err, "failed to read page header")
   }
 
@@ -122,7 +118,29 @@ func (paged *paged) read() error {
 
 // write paged file header
 func (paged *paged) write() error {
-  return write(paged, 0, paged.fileHeader)
+  fh := paged.fileHeader
+  // if !fh.dirty {
+  //   return nil
+  // }
+
+  var errors *multierror.Error
+
+  stream := stream.NewByteOutputStream(binary.BigEndian)
+  errors = multierror.Append(errors, stream.Write(fh.HeaderSize))
+  errors = multierror.Append(errors, stream.Write(fh.PageSize))
+  errors = multierror.Append(errors, stream.Write(fh.PageCount))
+  errors = multierror.Append(errors, stream.Write(fh.TotalCount))
+  errors = multierror.Append(errors, stream.Write(fh.FirstFreePage))
+  errors = multierror.Append(errors, stream.Write(fh.LastFreePage))
+  errors = multierror.Append(errors, stream.Write(fh.PageHeaderSize))
+  errors = multierror.Append(errors, stream.Write(fh.MaxKeySize))
+  errors = multierror.Append(errors, stream.Write(fh.RecordCount))
+
+  if errors.ErrorOrNil() != nil {
+    return errors
+  }
+
+  return write(paged, 0, stream.Bytes())
 }
 
 // get page by page number
@@ -227,6 +245,8 @@ type fileHeader struct {
   PageHeaderSize int8  // page header size (1 byte): size of each page header. Set to 64 (0x40) by default.
   MaxKeySize     int16
   RecordCount    int64 // record count (8 bytes): number of records stored in this file.
+
+  // dirty bool // non transient
 }
 
 func newFileHeader(config Config) *fileHeader {
@@ -236,6 +256,7 @@ func newFileHeader(config Config) *fileHeader {
     PageCount:      config.pageCount,
     PageHeaderSize: config.pageHeaderSize,
     MaxKeySize:     config.maxKeySize,
+    // dirty:          true,
   }
 }
 

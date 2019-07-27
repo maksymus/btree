@@ -9,11 +9,9 @@ import (
 
 func Test_newPaged(t *testing.T) {
   Convey("create new paged", t, func() {
-    paged, err := newPaged("test.dat", DefaultConfig())
+    paged := newPaged("test.dat", DefaultConfig())
 
     Convey("paged created with default values", func() {
-      So(err, ShouldBeNil)
-
       header := paged.fileHeader
 
       So(header.PageSize, ShouldEqual, DefaultPageSize)
@@ -31,7 +29,7 @@ func Test_newPaged(t *testing.T) {
 }
 
 func Test_open_FileMissing(t *testing.T) {
-  Convey("create new paged", t, func() {
+  Convey("paged - create new paged file", t, func() {
     filename := "/tmp/test.dat"
     os.Remove(filename)
 
@@ -39,11 +37,7 @@ func Test_open_FileMissing(t *testing.T) {
       os.Remove(filename)
     }()
 
-    paged, err := newPaged(filename, DefaultConfig())
-    if err != nil {
-      t.Errorf("failed to init paged with error %s\n%s", err, errors.Stack(err))
-    }
-
+    paged := newPaged(filename, DefaultConfig())
     if err := paged.open(); err != nil {
       t.Errorf("failed to open paged with error %s\n%s", err, errors.Stack(err))
     }
@@ -52,26 +46,18 @@ func Test_open_FileMissing(t *testing.T) {
       if stat, err := os.Stat(filename); os.IsNotExist(err) {
         t.Error("file not created")
       } else {
-        So(stat.Size(), ShouldEqual, 50)
+        So(stat.Size(), ShouldEqual, 49)
       }
     })
   })
 }
 
 func Test_open_FileExists_NotOpen(t *testing.T) {
-  Convey("create new paged", t, func() {
+  Convey("paged - open existing file", t, func() {
     filename := "/tmp/test.dat"
     os.Remove(filename)
 
-    // defer func() {
-    //   os.Remove(filename)
-    // }()
-
-    paged, err := newPaged(filename, DefaultConfig())
-    if err != nil {
-      t.Errorf("failed to init paged with error: %s\n%s", err, errors.Stack(err))
-    }
-
+    paged := newPaged(filename, DefaultConfig())
     if err := paged.open(); err != nil {
       t.Errorf("failed to open paged with error: %s\n%s", err, errors.Stack(err))
     }
@@ -84,12 +70,53 @@ func Test_open_FileExists_NotOpen(t *testing.T) {
       t.Errorf("failed to re-open paged with error: %s\n%s", err, errors.Stack(err))
     }
 
-    Convey("paged opened - file created", func() {
+    Convey("open existing file", func() {
       if stat, err := os.Stat(filename); os.IsNotExist(err) {
-        t.Error("file not created")
+        t.Error("failed to open existing file")
       } else {
-        So(stat.Size(), ShouldEqual, 50)
+        So(stat.Size(), ShouldEqual, 49)
       }
     })
   })
 }
+
+func Test_read_write_FileHeader(t *testing.T) {
+  Convey("paged reopened", t, func() {
+    filename := "/tmp/test.dat"
+    os.Remove(filename)
+
+    config := Config{
+      headerSize:     1000,
+      pageSize:       1001,
+      pageCount:      1002,
+      maxKeySize:     1003,
+      pageHeaderSize: 32,
+    }
+
+    paged := newPaged(filename, config)
+    if err := paged.open(); err != nil {
+      t.Errorf("failed to open paged with error: %s\n%s", err, errors.Stack(err))
+    }
+    paged.close()
+
+    paged1 := newPaged(filename, DefaultConfig())
+    if err := paged1.open(); err != nil {
+      t.Errorf("failed to open paged with error: %s\n%s", err, errors.Stack(err))
+    }
+    paged1.close()
+
+    Convey("paged file header is populated from file", func() {
+      if _, err := os.Stat(filename); os.IsNotExist(err) {
+        t.Error("failed to open existing file")
+      } else {
+        fileHeader := paged.fileHeader
+        So(fileHeader.HeaderSize, ShouldEqual, 1000)
+        So(fileHeader.PageSize, ShouldEqual, 1001)
+        So(fileHeader.PageCount, ShouldEqual, 1002)
+        So(fileHeader.MaxKeySize, ShouldEqual, 1003)
+        So(fileHeader.PageHeaderSize, ShouldEqual, 32)
+      }
+    })
+  })
+}
+

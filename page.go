@@ -26,7 +26,7 @@ type pageHeader struct {
   NextPage     int64 // next page (8 bytes): page number of the page that contains subsequent data for the record stored in this page, if more data is available.
 }
 
-func newPageHeader(config Config) *pageHeader {
+func newPageHeader() *pageHeader {
   return &pageHeader{}
 }
 
@@ -47,7 +47,7 @@ func newPage(paged *paged, pageNumber int64) *page {
   page := page{}
 
   page.paged = paged
-  page.pageHeader = newPageHeader(paged.config)
+  page.pageHeader = newPageHeader()
   page.pageNumber = pageNumber
   page.offset = int64(fileHeader.HeaderSize) +
     (int64(pageNumber) * int64(fileHeader.PageSize))
@@ -66,34 +66,30 @@ func (page *page) read() error {
   pageDataOffset := page.offset + int64(pageHeaderSize)
   pageDataSize := pageSize - int32(pageHeaderSize)
 
-  var errors error
+  var errors *multierror.Error
 
-  if err := read(page.paged, page.offset, uint32(pageHeaderSize), page.pageHeader); err != nil {
-    multierror.Append(errors, err)
-  }
+  err := read(page.paged, page.offset, uint32(pageHeaderSize), page.pageHeader)
+  errors = multierror.Append(errors, err)
 
-  if err := read(page.paged, pageDataOffset, uint32(pageDataSize), page.data); err != nil {
-    multierror.Append(errors, err)
-  }
+  err = read(page.paged, pageDataOffset, uint32(pageDataSize), page.data)
+  errors = multierror.Append(errors, err)
 
-  return errors
+  return errors.ErrorOrNil()
 }
 
 // write page header and page data to paged file
 func (page *page) write() error {
   dataOffset := int64(page.offset) + int64(page.paged.fileHeader.PageHeaderSize)
 
-  var errors error
+  var errors *multierror.Error
 
-  if err := write(page.paged, int64(page.offset), page.pageHeader); err != nil {
-    multierror.Append(errors, err)
-  }
+  err := write(page.paged, int64(page.offset), page.pageHeader)
+  errors = multierror.Append(errors, err)
 
-  if err := write(page.paged, dataOffset, &page.data); err != nil {
-    multierror.Append(errors, err)
-  }
+  err = write(page.paged, dataOffset, &page.data)
+  errors = multierror.Append(errors, err)
 
-  return errors
+  return errors.ErrorOrNil()
 }
 
 // write page data to buffer

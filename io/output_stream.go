@@ -1,4 +1,4 @@
-package stream
+package io
 
 import (
   "bytes"
@@ -10,28 +10,28 @@ type OutputStream interface {
   Write(data interface{}) error
 }
 
-type byteOutputStream struct {
+type byteArrayOutputStream struct {
   buffer *bytes.Buffer
   order  binary.ByteOrder
 
   lock sync.RWMutex
 }
 
-func NewByteOutputStream(order binary.ByteOrder) *byteOutputStream {
-  return &byteOutputStream{
+func NewByteOutputStream(order binary.ByteOrder) *byteArrayOutputStream {
+  return &byteArrayOutputStream{
     buffer: new(bytes.Buffer),
     order:  order,
   }
 }
 
-func (stream *byteOutputStream) Write(data interface{}) error {
+func (stream *byteArrayOutputStream) Write(data interface{}) error {
   stream.lock.Lock()
   defer stream.lock.Unlock()
 
   return binary.Write(stream.buffer, stream.order, data)
 }
 
-func (stream *byteOutputStream) Bytes() []byte {
+func (stream *byteArrayOutputStream) Bytes() []byte {
   stream.lock.RLock()
   defer stream.lock.RUnlock()
 

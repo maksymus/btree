@@ -4,7 +4,6 @@ import (
   "bytes"
   "encoding/binary"
   "fmt"
-  "github.com/hashicorp/go-multierror"
   sysio "io"
   "os"
 
@@ -113,50 +112,49 @@ func (paged *paged) read() error {
 
   fh := fileHeader{}
 
-  var errors *multierror.Error
+  var errs *errors.Error
   bis := io.NewByteInputStream(bs, binary.BigEndian)
-  errors = multierror.Append(errors, bis.Read(fh.HeaderSize))
-  errors = multierror.Append(errors, bis.Read(fh.PageSize))
-  errors = multierror.Append(errors, bis.Read(fh.PageCount))
-  errors = multierror.Append(errors, bis.Read(fh.TotalCount))
-  errors = multierror.Append(errors, bis.Read(fh.FirstFreePage))
-  errors = multierror.Append(errors, bis.Read(fh.LastFreePage))
-  errors = multierror.Append(errors, bis.Read(fh.PageHeaderSize))
-  errors = multierror.Append(errors, bis.Read(fh.MaxKeySize))
-  errors = multierror.Append(errors, bis.Read(fh.RecordCount))
+  errs = errors.Append(errs, bis.Read(fh.HeaderSize))
+  errs = errors.Append(errs, bis.Read(fh.PageSize))
+  errs = errors.Append(errs, bis.Read(fh.PageCount))
+  errs = errors.Append(errs, bis.Read(fh.TotalCount))
+  errs = errors.Append(errs, bis.Read(fh.FirstFreePage))
+  errs = errors.Append(errs, bis.Read(fh.LastFreePage))
+  errs = errors.Append(errs, bis.Read(fh.PageHeaderSize))
+  errs = errors.Append(errs, bis.Read(fh.MaxKeySize))
+  errs = errors.Append(errs, bis.Read(fh.RecordCount))
 
-  if errors.ErrorOrNil() == nil {
+  if errs.ErrorOrNil() == nil {
     paged.fileHeader = &fh
+    paged.fileHeader.dirty = true
   }
 
-  return errors.ErrorOrNil()
+  return errs.ErrorOrNil()
 }
 
 // write paged file header
 func (paged *paged) write() error {
+  var errs *errors.Error
+
   fh := paged.fileHeader
-  // if !fh.dirty {
-  //   return nil
-  // }
+  if fh.dirty {
+    bos := io.NewByteOutputStream(binary.BigEndian)
+    errs = errors.Append(errs, bos.Write(fh.HeaderSize))
+    errs = errors.Append(errs, bos.Write(fh.PageSize))
+    errs = errors.Append(errs, bos.Write(fh.PageCount))
+    errs = errors.Append(errs, bos.Write(fh.TotalCount))
+    errs = errors.Append(errs, bos.Write(fh.FirstFreePage))
+    errs = errors.Append(errs, bos.Write(fh.LastFreePage))
+    errs = errors.Append(errs, bos.Write(fh.PageHeaderSize))
+    errs = errors.Append(errs, bos.Write(fh.MaxKeySize))
+    errs = errors.Append(errs, bos.Write(fh.RecordCount))
 
-  var errors *multierror.Error
-
-  bos := io.NewByteOutputStream(binary.BigEndian)
-  errors = multierror.Append(errors, bos.Write(fh.HeaderSize))
-  errors = multierror.Append(errors, bos.Write(fh.PageSize))
-  errors = multierror.Append(errors, bos.Write(fh.PageCount))
-  errors = multierror.Append(errors, bos.Write(fh.TotalCount))
-  errors = multierror.Append(errors, bos.Write(fh.FirstFreePage))
-  errors = multierror.Append(errors, bos.Write(fh.LastFreePage))
-  errors = multierror.Append(errors, bos.Write(fh.PageHeaderSize))
-  errors = multierror.Append(errors, bos.Write(fh.MaxKeySize))
-  errors = multierror.Append(errors, bos.Write(fh.RecordCount))
-
-  if errors.ErrorOrNil() == nil {
-    return write(paged, 0, bos.Bytes())
+    if errs.ErrorOrNil() == nil {
+      return write(paged, 0, bos.Bytes())
+    }
   }
 
-  return errors.ErrorOrNil()
+  return errs.ErrorOrNil()
 }
 
 // get page by page number
@@ -272,7 +270,7 @@ func newFileHeader(config Config) *fileHeader {
     PageCount:      config.pageCount,
     PageHeaderSize: config.pageHeaderSize,
     MaxKeySize:     config.maxKeySize,
-    // dirty:          true,
+    dirty:          true,
   }
 }
 

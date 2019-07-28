@@ -3,7 +3,6 @@ package main
 import (
   "btree/errors"
   "bytes"
-  "github.com/hashicorp/go-multierror"
 )
 
 const (
@@ -66,30 +65,30 @@ func (page *page) read() error {
   pageDataOffset := page.offset + int64(pageHeaderSize)
   pageDataSize := pageSize - int32(pageHeaderSize)
 
-  var errors *multierror.Error
+  var errs *errors.Error
 
   err := read(page.paged, page.offset, uint32(pageHeaderSize), page.pageHeader)
-  errors = multierror.Append(errors, err)
+  errs = errors.Append(errs, err)
 
   err = read(page.paged, pageDataOffset, uint32(pageDataSize), page.data)
-  errors = multierror.Append(errors, err)
+  errs = errors.Append(errs, err)
 
-  return errors.ErrorOrNil()
+  return errs.ErrorOrNil()
 }
 
 // write page header and page data to paged file
 func (page *page) write() error {
   dataOffset := int64(page.offset) + int64(page.paged.fileHeader.PageHeaderSize)
 
-  var errors *multierror.Error
+  var errs *errors.Error
 
   err := write(page.paged, int64(page.offset), page.pageHeader)
-  errors = multierror.Append(errors, err)
+  errs = errors.Append(errs, err)
 
   err = write(page.paged, dataOffset, &page.data)
-  errors = multierror.Append(errors, err)
+  errs = errors.Append(errs, err)
 
-  return errors.ErrorOrNil()
+  return errs.ErrorOrNil()
 }
 
 // write page data to buffer

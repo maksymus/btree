@@ -109,7 +109,7 @@ func Test_read_write_FileHeader(t *testing.T) {
       if _, err := os.Stat(filename); os.IsNotExist(err) {
         t.Error("failed to open existing file")
       } else {
-        fileHeader := paged.fileHeader
+        fileHeader := paged1.fileHeader
         So(fileHeader.HeaderSize, ShouldEqual, 1000)
         So(fileHeader.PageSize, ShouldEqual, 1001)
         So(fileHeader.PageCount, ShouldEqual, 1002)

@@ -11,6 +11,7 @@ const (
 )
 
 func init() {
+  log.SetLevel(log.TraceLevel)
   log.SetFormatter(&log.TextFormatter{
     FullTimestamp: true,
   })

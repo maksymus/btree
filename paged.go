@@ -6,6 +6,7 @@ import (
   "fmt"
   sysio "io"
   "os"
+  "sync"
 
   "btree/errors"
   "btree/io"
@@ -27,6 +28,8 @@ type paged struct {
   file     *os.File
 
   fileHeader *fileHeader
+
+  lock sync.RWMutex
 }
 
 // create new paged
@@ -114,17 +117,19 @@ func (paged *paged) read() error {
 
   var errs *errors.Error
   bis := io.NewByteInputStream(bs, binary.BigEndian)
-  errs = errors.Append(errs, bis.Read(fh.HeaderSize))
-  errs = errors.Append(errs, bis.Read(fh.PageSize))
-  errs = errors.Append(errs, bis.Read(fh.PageCount))
-  errs = errors.Append(errs, bis.Read(fh.TotalCount))
-  errs = errors.Append(errs, bis.Read(fh.FirstFreePage))
-  errs = errors.Append(errs, bis.Read(fh.LastFreePage))
-  errs = errors.Append(errs, bis.Read(fh.PageHeaderSize))
-  errs = errors.Append(errs, bis.Read(fh.MaxKeySize))
-  errs = errors.Append(errs, bis.Read(fh.RecordCount))
+  errs = errors.Append(errs, bis.Read(&fh.HeaderSize))
+  errs = errors.Append(errs, bis.Read(&fh.PageSize))
+  errs = errors.Append(errs, bis.Read(&fh.PageCount))
+  errs = errors.Append(errs, bis.Read(&fh.TotalCount))
+  errs = errors.Append(errs, bis.Read(&fh.FirstFreePage))
+  errs = errors.Append(errs, bis.Read(&fh.LastFreePage))
+  errs = errors.Append(errs, bis.Read(&fh.PageHeaderSize))
+  errs = errors.Append(errs, bis.Read(&fh.MaxKeySize))
+  errs = errors.Append(errs, bis.Read(&fh.RecordCount))
 
   if errs.ErrorOrNil() == nil {
+    log.Debug("read file header from paged file: ", fmt.Sprintf("%+v", fh))
+
     paged.fileHeader = &fh
     paged.fileHeader.dirty = true
   }
@@ -245,6 +250,43 @@ func (paged *paged) writeValue(page *page, value *Value) error {
   page.pageHeader.NextPage = NoPage
 
   return nil
+}
+
+func (paged *paged) getFreePage() (*page, error) {
+  paged.lock.Lock()
+  defer paged.lock.Unlock()
+
+  var freePage *page
+
+  if paged.fileHeader.FirstFreePage != NoPage {
+    if page, err := paged.getPage(paged.fileHeader.FirstFreePage); err == nil {
+      paged.fileHeader.FirstFreePage = page.pageHeader.NextPage
+      if page.pageHeader.NextPage == NoPage {
+        paged.fileHeader.LastFreePage = NoPage
+      }
+      freePage = page
+    } else {
+      return nil, err
+    }
+  } else {
+    if page, err := paged.getPage(paged.incrementTotalCount()); err == nil {
+      freePage = page
+    } else {
+      return nil, err
+    }
+  }
+
+  freePage.pageHeader.NextPage = NoPage
+  freePage.pageHeader.Status = 0 // unused
+
+  return freePage, nil
+}
+
+func (paged *paged) incrementTotalCount() int64 {
+  paged.fileHeader.TotalCount++
+  paged.fileHeader.dirty = true
+
+  return paged.fileHeader.TotalCount - 1
 }
 
 // The paged file header consists of a number of fixed-length fields. Fields which are longer than one byte, are always

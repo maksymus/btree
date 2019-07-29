@@ -1,14 +1,9 @@
 package main
 
-import (
-  "fmt"
-  "os"
-)
-
 // https://cstack.github.io/db_tutorial/
 
 func main() {
-  filename :=  "/tmp/btree.dat"
+  filename :=  "/tmp/btree1.dat"
 
   // file, _ := os.OpenFile(filename, os.O_RDWR, 0666)
   //
@@ -22,12 +17,13 @@ func main() {
 
   // os.Remove(filename)
 
-  paged, err := newPaged(filename, DefaultConfig())
-  if err != nil {
-    fmt.Println("error: ", err)
-    os.Exit(1)
-  }
+  conf := DefaultConfig()
+
+  paged := newPaged(filename, conf)
 
   paged.open()
   defer paged.close()
+
+  // p, err := paged.getPage(0)
+  // fmt.Println(p, err)
 }

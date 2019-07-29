@@ -41,22 +41,19 @@ type page struct {
 }
 
 func newPage(paged *paged, pageNumber int64) *page {
-  fileHeader := paged.fileHeader
+  fh := paged.fileHeader
 
-  page := page{}
-
-  page.paged = paged
-  page.pageHeader = newPageHeader()
-  page.pageNumber = pageNumber
-  page.offset = int64(fileHeader.HeaderSize) +
-    (int64(pageNumber) * int64(fileHeader.PageSize))
-
-  return &page
+  return &page{
+    paged:      paged,
+    pageNumber: pageNumber,
+    pageHeader: newPageHeader(),
+    offset:     int64(fh.HeaderSize) + (int64(pageNumber) * int64(fh.PageSize)),
+  }
 }
 
 // read page header and page data from paged file
 func (page *page) read() error {
-  if len(page.data) > 0 {
+  if page.data == nil {
     return nil
   }
 

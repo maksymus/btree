@@ -4,9 +4,26 @@ import "github.com/hashicorp/go-multierror"
 
 // wrap go-mutlierror package
 type Error struct {
-  *multierror.Error
+  multierr *multierror.Error
 }
 
-func Append(err error, errs ...error) *Error {
-  return &Error {multierror.Append(err, errs...)}
+func (e *Error) Error() string {
+  return e.multierr.Error()
+}
+
+
+func (e *Error) ErrorOrNil() error {
+  if e == nil || e.multierr == nil {
+    return nil
+  }
+  
+  return e.multierr.ErrorOrNil()
+}
+
+func Append(err error, errs error) *Error {
+  if errs == nil {
+    return nil
+  }
+
+  return &Error {multierror.Append(err, errs)}
 }

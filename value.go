@@ -25,7 +25,7 @@ func NewValue(bs []byte, pos int, len int) *Value {
   }
 }
 
-// buffer from value
+// create buffer from value
 func (value *Value) Buffer() *bytes.Buffer {
   return bytes.NewBuffer(value.data[value.pos : value.pos+value.len])
 }

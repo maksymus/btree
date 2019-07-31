@@ -41,13 +41,11 @@ type page struct {
 }
 
 func newPage(paged *paged, pageNumber int64) *page {
-  fh := paged.fileHeader
-
   return &page{
     paged:      paged,
     pageNumber: pageNumber,
     pageHeader: newPageHeader(),
-    offset:     int64(fh.HeaderSize) + (int64(pageNumber) * int64(fh.PageSize)),
+    offset:     int64(paged.getHeaderSize()) + (int64(pageNumber) * int64(paged.getPageSize())),
   }
 }
 
@@ -57,8 +55,8 @@ func (page *page) read() error {
     return nil
   }
 
-  pageHeaderSize := page.paged.fileHeader.PageHeaderSize
-  pageSize := page.paged.fileHeader.PageSize
+  pageHeaderSize := page.paged.getPageHeaderSize()
+  pageSize := page.paged.getPageSize()
   pageDataOffset := page.offset + int64(pageHeaderSize)
   pageDataSize := pageSize - int32(pageHeaderSize)
 
@@ -75,7 +73,7 @@ func (page *page) read() error {
 
 // write page header and page data to paged file
 func (page *page) write() error {
-  dataOffset := int64(page.offset) + int64(page.paged.fileHeader.PageHeaderSize)
+  dataOffset := int64(page.offset) + int64(page.paged.getPageHeaderSize())
 
   var errs *errors.Error
 
@@ -103,11 +101,11 @@ func (page *page) streamTo(buffer *bytes.Buffer) error {
 
 // read data from buffer to page
 func (page *page) streamFrom(buffer *bytes.Buffer) error {
-  fileHeader := page.paged.fileHeader
+  paged := page.paged
   pageHeader := page.pageHeader
 
   // get key/data size of page
-  workSize := fileHeader.PageSize - int32(fileHeader.PageHeaderSize)
+  workSize := paged.getPageSize() - int32(paged.getPageHeaderSize())
 
   // set data length based on length of data in buffer
   bufferLength  := int32(buffer.Len())

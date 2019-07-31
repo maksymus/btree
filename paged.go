@@ -27,7 +27,7 @@ type paged struct {
   filename string
   file     *os.File
 
-  fileHeader *fileHeader
+  *fileHeader
 
   lock sync.RWMutex
 }
@@ -108,8 +108,8 @@ func (paged *paged) flush() error {
 
 // read paged file header
 func (paged *paged) read() error {
-  bs := make([]byte, paged.fileHeader.PageHeaderSize)
-  if err := read(paged, 0, uint32(paged.fileHeader.PageHeaderSize), bs); err != nil {
+  bs := make([]byte, paged.getPageHeaderSize())
+  if err := read(paged, 0, uint32(paged.getPageHeaderSize()), bs); err != nil {
     return errors.WrapMsg(err, "failed to read page header")
   }
 
@@ -117,15 +117,15 @@ func (paged *paged) read() error {
 
   var errs *errors.Error
   bis := io.NewByteInputStream(bs, binary.BigEndian)
-  errs = errors.Append(errs, bis.Read(&fh.HeaderSize))
-  errs = errors.Append(errs, bis.Read(&fh.PageSize))
-  errs = errors.Append(errs, bis.Read(&fh.PageCount))
-  errs = errors.Append(errs, bis.Read(&fh.TotalCount))
-  errs = errors.Append(errs, bis.Read(&fh.FirstFreePage))
-  errs = errors.Append(errs, bis.Read(&fh.LastFreePage))
-  errs = errors.Append(errs, bis.Read(&fh.PageHeaderSize))
-  errs = errors.Append(errs, bis.Read(&fh.MaxKeySize))
-  errs = errors.Append(errs, bis.Read(&fh.RecordCount))
+  errs = errors.Append(errs, bis.Read(&fh.headerSize))
+  errs = errors.Append(errs, bis.Read(&fh.pageSize))
+  errs = errors.Append(errs, bis.Read(&fh.pageCount))
+  errs = errors.Append(errs, bis.Read(&fh.totalCount))
+  errs = errors.Append(errs, bis.Read(&fh.firstFreePage))
+  errs = errors.Append(errs, bis.Read(&fh.lastFreePage))
+  errs = errors.Append(errs, bis.Read(&fh.pageHeaderSize))
+  errs = errors.Append(errs, bis.Read(&fh.maxKeySize))
+  errs = errors.Append(errs, bis.Read(&fh.recordCount))
 
   if errs.ErrorOrNil() == nil {
     log.Debug("read file header from paged file: ", fmt.Sprintf("%+v", fh))
@@ -144,15 +144,15 @@ func (paged *paged) write() error {
   fh := paged.fileHeader
   if fh.dirty {
     bos := io.NewByteOutputStream(binary.BigEndian)
-    errs = errors.Append(errs, bos.Write(fh.HeaderSize))
-    errs = errors.Append(errs, bos.Write(fh.PageSize))
-    errs = errors.Append(errs, bos.Write(fh.PageCount))
-    errs = errors.Append(errs, bos.Write(fh.TotalCount))
-    errs = errors.Append(errs, bos.Write(fh.FirstFreePage))
-    errs = errors.Append(errs, bos.Write(fh.LastFreePage))
-    errs = errors.Append(errs, bos.Write(fh.PageHeaderSize))
-    errs = errors.Append(errs, bos.Write(fh.MaxKeySize))
-    errs = errors.Append(errs, bos.Write(fh.RecordCount))
+    errs = errors.Append(errs, bos.Write(fh.getHeaderSize()))
+    errs = errors.Append(errs, bos.Write(fh.getPageSize()))
+    errs = errors.Append(errs, bos.Write(fh.getPageCount()))
+    errs = errors.Append(errs, bos.Write(fh.getTotalCount()))
+    errs = errors.Append(errs, bos.Write(fh.getFirstFreePage()))
+    errs = errors.Append(errs, bos.Write(fh.getLastFreePage()))
+    errs = errors.Append(errs, bos.Write(fh.getPageHeaderSize()))
+    errs = errors.Append(errs, bos.Write(fh.getMaxKeySize()))
+    errs = errors.Append(errs, bos.Write(fh.getRecordCount()))
 
     if errs.ErrorOrNil() == nil {
       return write(paged, 0, bos.Bytes())
@@ -232,7 +232,11 @@ func (paged *paged) writeValue(page *page, value *Value) error {
     }
 
     if nextPageNum := pageHeader.NextPage; nextPageNum == NoPage {
-      // TODO get free page
+      if freePage, err := paged.getFreePage(); err == nil {
+        page = freePage
+      } else {
+        return err
+      }
     } else {
       if nextPage, err := paged.getPage(nextPageNum); err == nil {
         page = nextPage
@@ -244,10 +248,15 @@ func (paged *paged) writeValue(page *page, value *Value) error {
 
   // clean up unused overflow pages
   if page.pageHeader.NextPage != NoPage {
-    // TODO unlink pages
+    if nextPage, err := paged.getPage(page.pageHeader.NextPage); err == nil {
+      paged.unlinkPages(nextPage)
+    } else {
+      return err
+    }
   }
 
   page.pageHeader.NextPage = NoPage
+  // page.pageHeader.dirty = true
 
   return nil
 }
@@ -258,11 +267,11 @@ func (paged *paged) getFreePage() (*page, error) {
 
   var freePage *page
 
-  if paged.fileHeader.FirstFreePage != NoPage {
-    if page, err := paged.getPage(paged.fileHeader.FirstFreePage); err == nil {
-      paged.fileHeader.FirstFreePage = page.pageHeader.NextPage
+  if paged.getFirstFreePage() != NoPage {
+    if page, err := paged.getPage(paged.getFirstFreePage()); err == nil {
+      paged.setFirstFreePage(page.pageHeader.NextPage)
       if page.pageHeader.NextPage == NoPage {
-        paged.fileHeader.LastFreePage = NoPage
+        paged.setLastFreePage(NoPage)
       }
       freePage = page
     } else {
@@ -278,42 +287,126 @@ func (paged *paged) getFreePage() (*page, error) {
 
   freePage.pageHeader.NextPage = NoPage
   freePage.pageHeader.Status = 0 // unused
+  // freePage.pageHeader.dirty = true
 
   return freePage, nil
 }
 
-func (paged *paged) incrementTotalCount() int64 {
-  paged.fileHeader.TotalCount++
-  paged.fileHeader.dirty = true
+// add overflow pages to list of free pages
+func (paged *paged) unlinkPages(p* page) error {
+  first := p
+  var last *page
+  
+  for last = p; last.pageHeader.NextPage != NoPage; {
+    if next, err := paged.getPage(last.pageHeader.NextPage); err == nil {
+      last = next
+    } else {
+      return err
+    }
+  }
+  
+  if paged.getLastFreePage() != NoPage {
+    if lastPage, err := paged.getPage(paged.getLastFreePage()); err == nil {
+      lastPage.pageHeader.NextPage = p.pageNumber
+    } else {
+      return err 
+    }
+  } 
+  
+  if paged.getFirstFreePage() == NoPage {
+    paged.setFirstFreePage(first.pageNumber)
+  }
+  
+  if last != nil {
+    paged.setLastFreePage(last.pageNumber)
+  }
 
-  return paged.fileHeader.TotalCount - 1
+  return nil
 }
 
 // The paged file header consists of a number of fixed-length fields. Fields which are longer than one byte, are always
 // stored in Big Endian format, which means the most significant byte is written at the lowest address.
 type fileHeader struct {
-  HeaderSize     int16 // header size (2 bytes): set to 4096 (0x1000), the size of this header.
-  PageSize       int32 // page size (4 bytes): set to 4096 (0x00001000), the page size.
-  PageCount      int64 // page count (8 bytes): this field is not used consistently. It is present mainly for historical reason.
-  TotalCount     int64 // total page count (8 bytes): total number of pages present in this file.
-  FirstFreePage  int64 // first free page (8 bytes): page number of the first unused page in this file.
-  LastFreePage   int64 // last free page (8 bytes): page number of the last unused page in this file.
-  PageHeaderSize int8  // page header size (1 byte): size of each page header. Set to 64 (0x40) by default.
-  MaxKeySize     int16
-  RecordCount    int64 // record count (8 bytes): number of records stored in this file.
+  headerSize     int16 // header size (2 bytes): set to 4096 (0x1000), the size of this header.
+  pageSize       int32 // page size (4 bytes): set to 4096 (0x00001000), the page size.
+  pageCount      int64 // page count (8 bytes): this field is not used consistently. It is present mainly for historical reason.
+  totalCount     int64 // total page count (8 bytes): total number of pages present in this file.
+  firstFreePage  int64 // first free page (8 bytes): page number of the first unused page in this file.
+  lastFreePage   int64 // last free page (8 bytes): page number of the last unused page in this file.
+  pageHeaderSize int8  // page header size (1 byte): size of each page header. Set to 64 (0x40) by default.
+  maxKeySize     int16
+  recordCount    int64 // record count (8 bytes): number of records stored in this file.
 
   dirty bool // non transient
 }
 
 func newFileHeader(config Config) *fileHeader {
   return &fileHeader{
-    HeaderSize:     config.headerSize,
-    PageSize:       config.pageSize,
-    PageCount:      config.pageCount,
-    PageHeaderSize: config.pageHeaderSize,
-    MaxKeySize:     config.maxKeySize,
+    headerSize:     config.headerSize,
+    pageSize:       config.pageSize,
+    pageCount:      config.pageCount,
+    pageHeaderSize: config.pageHeaderSize,
+    maxKeySize:     config.maxKeySize,
     dirty:          true,
   }
+}
+
+func (fh *fileHeader) getHeaderSize() int16 {
+  return fh.headerSize
+}
+
+func (fh *fileHeader) getPageSize() int32 {
+  return fh.pageSize
+}
+
+func (fh *fileHeader) getPageCount() int64 {
+  return fh.pageCount
+}
+
+func (fh *fileHeader) getTotalCount() int64 {
+  return fh.totalCount
+}
+
+func (fh *fileHeader) getPageHeaderSize() int8 {
+  return fh.pageHeaderSize
+}
+
+func (fh *fileHeader) getMaxKeySize() int16 {
+  return fh.maxKeySize
+}
+
+func (fh *fileHeader) incrementTotalCount() int64 {
+  fh.totalCount++
+  fh.dirty = true
+
+  return fh.totalCount - 1
+}
+
+func (fh *fileHeader) getFirstFreePage() int64 {
+  return fh.firstFreePage
+}
+
+func (fh *fileHeader) setFirstFreePage(pageNumber int64) {
+  fh.dirty = true
+  fh.firstFreePage = pageNumber
+}
+
+func (fh *fileHeader) getLastFreePage() int64 {
+  return fh.lastFreePage
+}
+
+func (fh *fileHeader) setLastFreePage(pageNumber int64) {
+  fh.dirty = true
+  fh.lastFreePage = pageNumber
+}
+
+func (fh *fileHeader) getRecordCount() int64 {
+  return fh.recordCount
+}
+
+func (fh *fileHeader) setRecordCount(count int64) {
+  fh.dirty = true
+  fh.recordCount = count
 }
 
 // write data to paged file starting from offset

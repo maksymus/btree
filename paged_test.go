@@ -12,18 +12,16 @@ func Test_newPaged(t *testing.T) {
     paged := newPaged("test.dat", DefaultConfig())
 
     Convey("paged created with default values", func() {
-      header := paged.fileHeader
+      So(paged.pageSize, ShouldEqual, DefaultPageSize)
+      So(paged.pageHeaderSize, ShouldEqual, DefaultPageHeaderSize)
+      So(paged.headerSize, ShouldEqual, DefaultHeaderSize)
+      So(paged.maxKeySize, ShouldEqual, DefaultMaxKeySize)
+      So(paged.pageCount, ShouldEqual, DefaultPageCount)
 
-      So(header.PageSize, ShouldEqual, DefaultPageSize)
-      So(header.PageHeaderSize, ShouldEqual, DefaultPageHeaderSize)
-      So(header.HeaderSize, ShouldEqual, DefaultHeaderSize)
-      So(header.MaxKeySize, ShouldEqual, DefaultMaxKeySize)
-      So(header.PageCount, ShouldEqual, DefaultPageCount)
-
-      So(header.FirstFreePage, ShouldEqual, 0)
-      So(header.LastFreePage, ShouldEqual, 0)
-      So(header.RecordCount, ShouldEqual, 0)
-      So(header.TotalCount, ShouldEqual, 0)
+      So(paged.firstFreePage, ShouldEqual, 0)
+      So(paged.lastFreePage, ShouldEqual, 0)
+      So(paged.recordCount, ShouldEqual, 0)
+      So(paged.totalCount, ShouldEqual, 0)
     })
   })
 }
@@ -109,12 +107,11 @@ func Test_read_write_FileHeader(t *testing.T) {
       if _, err := os.Stat(filename); os.IsNotExist(err) {
         t.Error("failed to open existing file")
       } else {
-        fileHeader := paged1.fileHeader
-        So(fileHeader.HeaderSize, ShouldEqual, 1000)
-        So(fileHeader.PageSize, ShouldEqual, 1001)
-        So(fileHeader.PageCount, ShouldEqual, 1002)
-        So(fileHeader.MaxKeySize, ShouldEqual, 1003)
-        So(fileHeader.PageHeaderSize, ShouldEqual, 32)
+        So(paged1.headerSize, ShouldEqual, 1000)
+        So(paged1.pageSize, ShouldEqual, 1001)
+        So(paged1.pageCount, ShouldEqual, 1002)
+        So(paged1.maxKeySize, ShouldEqual, 1003)
+        So(paged1.pageHeaderSize, ShouldEqual, 32)
       }
     })
   })

@@ -117,3 +117,31 @@ func Test_read_write_FileHeader(t *testing.T) {
   })
 }
 
+func Test_writeValue(t *testing.T) {
+  Convey("paged opened and data written to page", t, func() {
+    filename := "/tmp/test.dat"
+    os.Remove(filename)
+
+    paged := newPaged(filename, DefaultConfig())
+    if err := paged.open(); err != nil {
+      t.Errorf("failed to open paged with error: %s\n%s", err, errors.Stack(err))
+    }
+
+    freePageNum := paged.getFirstFreePage()
+    freePage, err := paged.getPage(freePageNum)
+    if err != nil {
+      t.Errorf("failed to get page: %s\n%s", err, errors.Stack(err))
+    }
+
+    freePage.setStatus(127)
+    err = paged.writeValue(freePage, NewValue([]byte{ 1, 2, 3}, 0, 3))
+    if err != nil {
+      t.Errorf("failed to write data: %s\n%s", err, errors.Stack(err))
+    }
+
+    // Convey("paged file header is populated from file", func() {
+    // })
+  })
+}
+
+

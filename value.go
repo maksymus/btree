@@ -9,7 +9,7 @@ type Value struct {
   data []byte
   pos  int
   len  int
-  hash int
+  hash uint32
 }
 
 // create new value
@@ -21,7 +21,7 @@ func NewValue(bs []byte, pos int, len int) *Value {
     data: bs,
     pos: pos,
     len: len,
-    hash: hash32.Size(),
+    hash: hash32.Sum32(),
   }
 }
 

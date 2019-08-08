@@ -207,7 +207,7 @@ func (paged *paged) readValue(page *page) (*Value, error) {
 
 // write value to page or pages
 func (paged *paged) writeValue(page *page, value *Value) error {
-  page.recordLength = int32(value.len)
+  page.setRecordLength(int32(value.len))
 
   buffer := value.Buffer()
 
@@ -251,8 +251,7 @@ func (paged *paged) writeValue(page *page, value *Value) error {
     }
   }
 
-  page.nextPage = NoPage
-  // page.pageHeader.dirty = true
+  page.setNextPage(NoPage)
 
   return nil
 }
@@ -279,9 +278,8 @@ func (paged *paged) getFreePage() (*page, error) {
     return nil, err
   }
 
-  freePage.nextPage = NoPage
-  freePage.status = 0 // unused
-  // freePage.pageHeader.dirty = true
+  freePage.setNextPage(NoPage)
+  freePage.setStatus(0) // unused
 
   return freePage, nil
 }
@@ -300,7 +298,7 @@ func (paged *paged) unlinkPages(p* page) error {
   
   if paged.getLastFreePage() != NoPage {
     if lastPage, err := paged.getPage(paged.getLastFreePage()); err == nil {
-      lastPage.nextPage = p.pageNumber
+      lastPage.setNextPage(p.pageNumber)
     } else {
       return err 
     }

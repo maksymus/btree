@@ -19,12 +19,12 @@ const (
 //
 // At this address, it will then find the header of the wanted page, and 64 bytes further, the start of the page's data.
 type pageHeader struct {
-  status       int8  // status (1 byte): pages in the data file are either used or unused. Used pages contain actual data.
-  keyLength    int16 // key length (2 bytes): pages have the possibility of storing a key just before their actual data.
-  keyHash      int16 // key hash (4 bytes): As the name suggests, this field stores a 32-bit hash value calculated from the key.
-  dataLength   int32 // data len (4 bytes): The length of the data stored in this page.
-  recordLength int32 // record len (4 bytes): the total length of the data record of which part is stored in this page.
-  nextPage     int64 // next page (8 bytes): page number of the page that contains subsequent data for the record stored in this page, if more data is available.
+  status       int8   // status (1 byte): pages in the data file are either used or unused. Used pages contain actual data.
+  keyLength    int16  // key length (2 bytes): pages have the possibility of storing a key just before their actual data.
+  keyHash      uint32 // key hash (4 bytes): As the name suggests, this field stores a 32-bit hash value calculated from the key.
+  dataLength   int32  // data len (4 bytes): The length of the data stored in this page.
+  recordLength int32  // record len (4 bytes): the total length of the data record of which part is stored in this page.
+  nextPage     int64  // next page (8 bytes): page number of the page that contains subsequent data for the record stored in this page, if more data is available.
 
   dirty bool // transient
 }
@@ -33,22 +33,56 @@ func newPageHeader() *pageHeader {
   return &pageHeader{}
 }
 
+func (page *page) setStatus(status int8) {
+  page.status = status
+  page.dirty = true
+}
+
+func (page *page) setKeyLength(keyLength int16) {
+  page.keyLength = keyLength
+  page.dirty = true
+}
+
+func (page *page) setKeyHash(keyHash uint32) {
+  page.keyHash = keyHash
+  page.dirty = true
+}
+
+func (page *page) setDataLength(dataLength int32) {
+  page.dataLength = dataLength
+  page.dirty = true
+}
+
+func (page *page) setRecordLength(recordLength int32) {
+  page.recordLength = recordLength
+  page.dirty = true
+}
+
+func (page *page) setNextPage(nextPage int64) {
+  page.nextPage = nextPage
+  page.dirty = true
+}
+
 // page stores page info and page data
 type page struct {
   pageNumber int64 // page number
   offset     int64 // overall page offset if paged file
 
   paged      *paged      // reference to paged file
+
   *pageHeader // page header with page info
 
   data []byte // data stores key and value or value only if key is missing
 }
 
 func newPage(paged *paged, pageNumber int64) *page {
+  pageHeader := newPageHeader()
+  pageHeader.nextPage = NoPage
+
   return &page{
     paged:      paged,
     pageNumber: pageNumber,
-    pageHeader: newPageHeader(),
+    pageHeader: pageHeader,
     offset:     int64(paged.getHeaderSize()) + (int64(pageNumber) * int64(paged.getPageSize())),
   }
 }
@@ -135,18 +169,30 @@ func (page *page) streamFrom(buffer *bytes.Buffer) error {
     page.dataLength = bufferLength
   }
 
+  data := make([]byte, page.dataLength)
+  page.data = append(page.data, data...)
+
   // read data from buffer
   if _, err := buffer.Read(page.data[page.keyLength:]); err != nil {
     return errors.Wrap(err)
   }
 
+  page.dirty = true
+
   return nil
 }
 
-func (page *page) getKey() (*Value, error) {
-  panic("implement me")
+func (page *page) getKey() *Value {
+  return NewValue(page.data, 0, int(page.keyLength))
 }
 
-func (page *page) setKey(value *Value) error {
-  panic("implement me")
+// setKey wipes out data
+func (page *page) setKey(value *Value) {
+  page.setKeyLength(int16(len(value.data)))
+  page.setKeyHash(value.hash)
+  page.setRecordLength(0)
+
+  page.data = make([]byte, page.keyLength)
+
+  copy(page.data[:page.keyLength], value.data)
 }

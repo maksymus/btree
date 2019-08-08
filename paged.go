@@ -108,9 +108,9 @@ func (paged *paged) flush() error {
 
 // read paged file header
 func (paged *paged) read() error {
-  bs := make([]byte, paged.getPageHeaderSize())
-  if err := read(paged, 0, uint32(paged.getPageHeaderSize()), bs); err != nil {
-    return errors.WrapMsg(err, "failed to read page header")
+  bs := make([]byte, paged.getHeaderSize())
+  if err := read(paged, 0, uint32(paged.getHeaderSize()), bs); err != nil {
+    return err
   }
 
   fh := fileHeader{}
@@ -141,18 +141,17 @@ func (paged *paged) read() error {
 func (paged *paged) write() error {
   var errs *errors.Error
 
-  fh := paged.fileHeader
-  if fh.dirty {
+  if paged.dirty {
     bos := io.NewByteOutputStream(binary.BigEndian)
-    errs = errors.Append(errs, bos.Write(fh.getHeaderSize()))
-    errs = errors.Append(errs, bos.Write(fh.getPageSize()))
-    errs = errors.Append(errs, bos.Write(fh.getPageCount()))
-    errs = errors.Append(errs, bos.Write(fh.getTotalCount()))
-    errs = errors.Append(errs, bos.Write(fh.getFirstFreePage()))
-    errs = errors.Append(errs, bos.Write(fh.getLastFreePage()))
-    errs = errors.Append(errs, bos.Write(fh.getPageHeaderSize()))
-    errs = errors.Append(errs, bos.Write(fh.getMaxKeySize()))
-    errs = errors.Append(errs, bos.Write(fh.getRecordCount()))
+    errs = errors.Append(errs, bos.Write(paged.getHeaderSize()))
+    errs = errors.Append(errs, bos.Write(paged.getPageSize()))
+    errs = errors.Append(errs, bos.Write(paged.getPageCount()))
+    errs = errors.Append(errs, bos.Write(paged.getTotalCount()))
+    errs = errors.Append(errs, bos.Write(paged.getFirstFreePage()))
+    errs = errors.Append(errs, bos.Write(paged.getLastFreePage()))
+    errs = errors.Append(errs, bos.Write(paged.getPageHeaderSize()))
+    errs = errors.Append(errs, bos.Write(paged.getMaxKeySize()))
+    errs = errors.Append(errs, bos.Write(paged.getRecordCount()))
 
     if errs.ErrorOrNil() == nil {
       return write(paged, 0, bos.Bytes())
@@ -180,7 +179,7 @@ func (paged *paged) getPage(pageNum int64) (*page, error) {
 // read page value
 // iterates over pages if value spans through several pages
 func (paged *paged) readValue(page *page) (*Value, error) {
-  recordLength := page.pageHeader.RecordLength
+  recordLength := page.recordLength
   buffer := bytes.NewBuffer(make([]byte, recordLength))
 
   currentPage := page
@@ -190,7 +189,7 @@ func (paged *paged) readValue(page *page) (*Value, error) {
       return nil, err
     }
 
-    nextPageNum := currentPage.pageHeader.NextPage
+    nextPageNum := currentPage.nextPage
     if nextPageNum == NoPage {
       break
     }
@@ -208,15 +207,12 @@ func (paged *paged) readValue(page *page) (*Value, error) {
 
 // write value to page or pages
 func (paged *paged) writeValue(page *page, value *Value) error {
-  pageHeader := page.pageHeader
-  pageHeader.RecordLength = int32(value.len)
+  page.recordLength = int32(value.len)
 
   buffer := value.Buffer()
 
   // if more data left in buffer then write to page
   for buffer.Len() > 0 {
-    pageHeader := page.pageHeader
-
     if err := page.streamFrom(buffer); err != nil {
       return err
     }
@@ -231,7 +227,7 @@ func (paged *paged) writeValue(page *page, value *Value) error {
       break
     }
 
-    if nextPageNum := pageHeader.NextPage; nextPageNum == NoPage {
+    if nextPageNum := page.nextPage; nextPageNum == NoPage {
       if freePage, err := paged.getFreePage(); err == nil {
         page = freePage
       } else {
@@ -247,15 +243,15 @@ func (paged *paged) writeValue(page *page, value *Value) error {
   }
 
   // clean up unused overflow pages
-  if page.pageHeader.NextPage != NoPage {
-    if nextPage, err := paged.getPage(page.pageHeader.NextPage); err == nil {
+  if page.nextPage != NoPage {
+    if nextPage, err := paged.getPage(page.nextPage); err == nil {
       paged.unlinkPages(nextPage)
     } else {
       return err
     }
   }
 
-  page.pageHeader.NextPage = NoPage
+  page.nextPage = NoPage
   // page.pageHeader.dirty = true
 
   return nil
@@ -266,27 +262,25 @@ func (paged *paged) getFreePage() (*page, error) {
   defer paged.lock.Unlock()
 
   var freePage *page
+  var err error
 
   if paged.getFirstFreePage() != NoPage {
-    if page, err := paged.getPage(paged.getFirstFreePage()); err == nil {
-      paged.setFirstFreePage(page.pageHeader.NextPage)
-      if page.pageHeader.NextPage == NoPage {
+    if freePage, err = paged.getPage(paged.getFirstFreePage()); err == nil {
+      paged.setFirstFreePage(freePage.nextPage)
+      if freePage.nextPage == NoPage {
         paged.setLastFreePage(NoPage)
       }
-      freePage = page
-    } else {
-      return nil, err
     }
   } else {
-    if page, err := paged.getPage(paged.incrementTotalCount()); err == nil {
-      freePage = page
-    } else {
-      return nil, err
-    }
+    freePage, err = paged.getPage(paged.incrementTotalCount())
   }
 
-  freePage.pageHeader.NextPage = NoPage
-  freePage.pageHeader.Status = 0 // unused
+  if err != nil {
+    return nil, err
+  }
+
+  freePage.nextPage = NoPage
+  freePage.status = 0 // unused
   // freePage.pageHeader.dirty = true
 
   return freePage, nil
@@ -294,11 +288,10 @@ func (paged *paged) getFreePage() (*page, error) {
 
 // add overflow pages to list of free pages
 func (paged *paged) unlinkPages(p* page) error {
-  first := p
-  var last *page
-  
-  for last = p; last.pageHeader.NextPage != NoPage; {
-    if next, err := paged.getPage(last.pageHeader.NextPage); err == nil {
+  first, last := p, p
+
+  for ;last.nextPage != NoPage; {
+    if next, err := paged.getPage(last.nextPage); err == nil {
       last = next
     } else {
       return err
@@ -307,7 +300,7 @@ func (paged *paged) unlinkPages(p* page) error {
   
   if paged.getLastFreePage() != NoPage {
     if lastPage, err := paged.getPage(paged.getLastFreePage()); err == nil {
-      lastPage.pageHeader.NextPage = p.pageNumber
+      lastPage.nextPage = p.pageNumber
     } else {
       return err 
     }
@@ -317,9 +310,7 @@ func (paged *paged) unlinkPages(p* page) error {
     paged.setFirstFreePage(first.pageNumber)
   }
   
-  if last != nil {
-    paged.setLastFreePage(last.pageNumber)
-  }
+  paged.setLastFreePage(last.pageNumber)
 
   return nil
 }

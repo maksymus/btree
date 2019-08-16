@@ -103,7 +103,7 @@ func (paged *paged) create() error {
 }
 
 func (paged *paged) flush() error {
-  return nil
+  return paged.write()
 }
 
 // read paged file header
@@ -161,6 +161,14 @@ func (paged *paged) write() error {
   return errs.ErrorOrNil()
 }
 
+func (paged *paged) isFilePage(pageNum int64) bool {
+  if stat, err := paged.file.Stat(); err == nil {
+    return  int64(paged.getPageSize()) * (pageNum + 1) < stat.Size()
+  } else {
+    return false
+  }
+}
+
 // get page by page number
 func (paged *paged) getPage(pageNum int64) (*page, error) {
   if pageNum < 0 {
@@ -179,8 +187,7 @@ func (paged *paged) getPage(pageNum int64) (*page, error) {
 // read page value
 // iterates over pages if value spans through several pages
 func (paged *paged) readValue(page *page) (*Value, error) {
-  recordLength := page.recordLength
-  buffer := bytes.NewBuffer(make([]byte, recordLength))
+  buffer := bytes.NewBuffer(make([]byte, 0))
 
   currentPage := page
 

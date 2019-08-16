@@ -89,16 +89,15 @@ func newPage(paged *paged, pageNumber int64) *page {
 
 // read page header and page data from paged file
 func (page *page) read() error {
-  if page.data == nil {
+  paged := page.paged
+
+  // if page is not in file then return new page
+  if !paged.isFilePage(page.pageNumber) {
     return nil
   }
 
-  paged := page.paged
-
   pageHeaderSize := paged.getPageHeaderSize()
-  pageSize := paged.getPageSize()
   pageDataOffset := page.offset + int64(pageHeaderSize)
-  pageDataSize := pageSize - int32(pageHeaderSize)
 
   var errs *errors.Error
 
@@ -115,7 +114,8 @@ func (page *page) read() error {
   errs = errors.Append(errs, bis.Read(&page.nextPage))
 
   // read page data
-  errs = errors.Append(errs, read(page.paged, pageDataOffset, uint32(pageDataSize), page.data))
+  page.data = make([]byte, page.dataLength)
+  errs = errors.Append(errs, read(page.paged, pageDataOffset, uint32(page.dataLength), &page.data))
 
   return errs.ErrorOrNil()
 }

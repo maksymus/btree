@@ -7,6 +7,8 @@ import (
   "testing"
 )
 
+var filename = "/tmp/test.dat"
+
 func Test_newPaged(t *testing.T) {
   Convey("create new paged", t, func() {
     paged := newPaged("test.dat", DefaultConfig())
@@ -28,7 +30,6 @@ func Test_newPaged(t *testing.T) {
 
 func Test_open_FileMissing(t *testing.T) {
   Convey("paged - create new paged file", t, func() {
-    filename := "/tmp/test.dat"
     os.Remove(filename)
 
     defer func() {
@@ -52,7 +53,6 @@ func Test_open_FileMissing(t *testing.T) {
 
 func Test_open_FileExists_NotOpen(t *testing.T) {
   Convey("paged - open existing file", t, func() {
-    filename := "/tmp/test.dat"
     os.Remove(filename)
 
     paged := newPaged(filename, DefaultConfig())
@@ -80,7 +80,6 @@ func Test_open_FileExists_NotOpen(t *testing.T) {
 
 func Test_read_write_FileHeader(t *testing.T) {
   Convey("paged reopened", t, func() {
-    filename := "/tmp/test.dat"
     os.Remove(filename)
 
     config := Config{
@@ -119,7 +118,6 @@ func Test_read_write_FileHeader(t *testing.T) {
 
 func Test_writeValue(t *testing.T) {
   Convey("paged opened and data written to page", t, func() {
-    filename := "/tmp/test.dat"
     os.Remove(filename)
 
     paged := newPaged(filename, DefaultConfig())
@@ -127,8 +125,7 @@ func Test_writeValue(t *testing.T) {
       t.Errorf("failed to open paged with error: %s\n%s", err, errors.Stack(err))
     }
 
-    freePageNum := paged.getFirstFreePage()
-    freePage, err := paged.getPage(freePageNum)
+    freePage, err := paged.getPage(0)
     if err != nil {
       t.Errorf("failed to get page: %s\n%s", err, errors.Stack(err))
     }
@@ -138,9 +135,34 @@ func Test_writeValue(t *testing.T) {
     if err != nil {
       t.Errorf("failed to write data: %s\n%s", err, errors.Stack(err))
     }
+    paged.close()
 
-    // Convey("paged file header is populated from file", func() {
-    // })
+    Convey("paged reopened and data is persisted", func() {
+      paged1 := newPaged(filename, DefaultConfig())
+      if err := paged1.open(); err != nil {
+        t.Errorf("failed to open paged with error: %s\n%s", err, errors.Stack(err))
+      }
+      defer paged1.close()
+
+      // check page 0
+      page, err := paged1.getPage(0)
+      if err != nil {
+        t.Errorf("failed to fetch page: %s\n%s", err, errors.Stack(err))
+      }
+
+
+      So(page.pageHeader.status, ShouldEqual, 127)
+      So(page.pageHeader.nextPage, ShouldEqual, -1)
+      So(page.pageHeader.keyLength, ShouldEqual, 0)
+      So(page.pageHeader.keyHash, ShouldEqual, 0)
+      So(page.pageHeader.recordLength, ShouldEqual, 3)
+      So(page.pageHeader.dataLength, ShouldEqual, 3)
+
+      value, err := paged1.readValue(page)
+      So(err, ShouldBeNil)
+
+      So(value.data, ShouldResemble, []byte{ 1, 2, 3})
+    })
   })
 }
 

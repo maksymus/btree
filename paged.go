@@ -1,6 +1,7 @@
 package main
 
 import (
+  "btree/cache"
   "bytes"
   "encoding/binary"
   "fmt"
@@ -23,11 +24,13 @@ import (
 
 // paged abstraction for paged file
 type paged struct {
+  *fileHeader
+
+  pageCache cache.Cache
+
   isOpen   bool
   filename string
   file     *os.File
-
-  *fileHeader
 
   lock sync.RWMutex
 }
@@ -37,6 +40,7 @@ func newPaged(filename string, config Config) *paged {
   return &paged{
     filename:   filename,
     fileHeader: newFileHeader(config),
+    pageCache: cache.NewLruCache(config.pageCacheSize),
   }
 }
 
@@ -175,11 +179,16 @@ func (paged *paged) getPage(pageNum int64) (*page, error) {
     return nil, errors.New("negative page number")
   }
 
-  // todo use lru/other cache
+  if cachedPage, ok := paged.pageCache.Get(pageNum); ok {
+    return cachedPage.(*page), nil
+  }
+
   page := newPage(paged, pageNum)
-  if err := page.read(); err != nil {
+  if err := paged.readPage(page); err != nil {
     return nil, err
   }
+
+  paged.pageCache.Put(pageNum, page)
 
   return page, nil
 }
@@ -220,12 +229,12 @@ func (paged *paged) writeValue(page *page, value *Value) error {
 
   // if more data left in buffer then write to page
   for buffer.Len() > 0 {
-    if err := page.streamFrom(buffer); err != nil {
+    if err := page.streamFrom(buffer, paged); err != nil {
       return err
     }
 
     // write current page
-    if err := page.write(); err != nil {
+    if err := paged.writePage(page); err != nil {
       return err
     }
 
@@ -303,8 +312,8 @@ func (paged *paged) unlinkPages(p* page) error {
     }
   }
   
-  if paged.getLastFreePage() != NoPage {
-    if lastPage, err := paged.getPage(paged.getLastFreePage()); err == nil {
+  if lastFreePage := paged.getLastFreePage(); lastFreePage != NoPage {
+    if lastPage, err := paged.getPage(lastFreePage); err == nil {
       lastPage.setNextPage(p.pageNumber)
     } else {
       return err 
@@ -343,7 +352,10 @@ func newFileHeader(config Config) *fileHeader {
     pageCount:      config.pageCount,
     pageHeaderSize: config.pageHeaderSize,
     maxKeySize:     config.maxKeySize,
-    dirty:          true,
+    firstFreePage:   NoPage,
+    lastFreePage:   NoPage,
+
+    dirty: true,
   }
 }
 

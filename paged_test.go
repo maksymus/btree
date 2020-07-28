@@ -20,8 +20,8 @@ func Test_newPaged(t *testing.T) {
       So(paged.maxKeySize, ShouldEqual, DefaultMaxKeySize)
       So(paged.pageCount, ShouldEqual, DefaultPageCount)
 
-      So(paged.firstFreePage, ShouldEqual, 0)
-      So(paged.lastFreePage, ShouldEqual, 0)
+      So(paged.firstFreePage, ShouldEqual, NoPage)
+      So(paged.lastFreePage, ShouldEqual, NoPage)
       So(paged.recordCount, ShouldEqual, 0)
       So(paged.totalCount, ShouldEqual, 0)
     })

@@ -29,10 +29,6 @@ type pageHeader struct {
   dirty bool // transient
 }
 
-func newPageHeader() *pageHeader {
-  return &pageHeader{}
-}
-
 func (page *page) setStatus(status int8) {
   page.status = status
   page.dirty = true
@@ -68,29 +64,24 @@ type page struct {
   pageNumber int64 // page number
   offset     int64 // overall page offset if paged file
 
-  paged      *paged      // reference to paged file
-
-  *pageHeader // page header with page info
+  pageHeader // page header with page info
 
   data []byte // data stores key and value or value only if key is missing
 }
 
 func newPage(paged *paged, pageNumber int64) *page {
-  pageHeader := newPageHeader()
+  pageHeader := pageHeader{}
   pageHeader.nextPage = NoPage
 
   return &page{
-    paged:      paged,
     pageNumber: pageNumber,
     pageHeader: pageHeader,
-    offset:     int64(paged.getHeaderSize()) + (int64(pageNumber) * int64(paged.getPageSize())),
+    offset:     int64(paged.getHeaderSize()) + (pageNumber * int64(paged.getPageSize())),
   }
 }
 
 // read page header and page data from paged file
-func (page *page) read() error {
-  paged := page.paged
-
+func (paged *paged) readPage(page *page) error {
   // if page is not in file then return new page
   if !paged.isFilePage(page.pageNumber) {
     return nil
@@ -115,13 +106,13 @@ func (page *page) read() error {
 
   // read page data
   page.data = make([]byte, page.dataLength)
-  errs = errors.Append(errs, read(page.paged, pageDataOffset, uint32(page.dataLength), &page.data))
+  errs = errors.Append(errs, read(paged, pageDataOffset, uint32(page.dataLength), &page.data))
 
   return errs.ErrorOrNil()
 }
 
 // write page header and page data to paged file
-func (page *page) write() error {
+func (paged *paged) writePage(page *page) error {
   var errs *errors.Error
 
   if page.dirty {
@@ -133,11 +124,11 @@ func (page *page) write() error {
     errs = errors.Append(errs, headerBos.Write(page.recordLength))
     errs = errors.Append(errs, headerBos.Write(page.nextPage))
 
-    dataOffset := int64(page.offset) + int64(page.paged.getPageHeaderSize())
+    dataOffset := int64(page.offset) + int64(paged.getPageHeaderSize())
 
     if errs.ErrorOrNil() == nil {
-      errs = errors.Append(errs, write(page.paged, int64(page.offset), headerBos.Bytes()))
-      errs = errors.Append(errs, write(page.paged, dataOffset, &page.data))
+      errs = errors.Append(errs, write(paged, int64(page.offset), headerBos.Bytes()))
+      errs = errors.Append(errs, write(paged, dataOffset, &page.data))
     }
   }
 
@@ -156,9 +147,7 @@ func (page *page) streamTo(buffer *bytes.Buffer) error {
 }
 
 // read data from buffer to page
-func (page *page) streamFrom(buffer *bytes.Buffer) error {
-  paged := page.paged
-
+func (page *page) streamFrom(buffer *bytes.Buffer, paged *paged) error {
   // get key/data size of page
   workSize := paged.getPageSize() - int32(paged.getPageHeaderSize())
 

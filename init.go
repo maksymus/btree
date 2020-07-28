@@ -8,6 +8,8 @@ const (
   DefaultPageCount      = 1024
   DefaultMaxKeySize     = 256
   DefaultPageHeaderSize = 64
+
+  DefaultPageCacheSize  = 1000
 )
 
 func init() {
@@ -25,6 +27,8 @@ type Config struct {
   pageCount      int64 // init page count
   maxKeySize     int16 // max key size
   pageHeaderSize int8  // page header size
+
+  pageCacheSize  int   // page cache size
 }
 
 // Default paged config
@@ -35,5 +39,7 @@ func DefaultConfig() Config {
     pageCount:      DefaultPageCount,
     maxKeySize:     DefaultMaxKeySize,
     pageHeaderSize: DefaultPageHeaderSize,
+
+    pageCacheSize:  DefaultPageCacheSize,
   }
 }

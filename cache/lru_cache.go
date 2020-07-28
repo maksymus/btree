@@ -13,7 +13,7 @@ type lruCache struct {
   elements map[interface{}] *list.Element
 }
 
-func NewLruCache(maxSize int) *lruCache {
+func NewLruCache(maxSize int) Cache {
   return &lruCache{
     maxSize:  maxSize,
     list:     list.New(),

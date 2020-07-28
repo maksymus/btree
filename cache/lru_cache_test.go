@@ -8,7 +8,12 @@ import (
 
 func Test_Put_MoveToFront(t *testing.T) {
 	Convey("put value", t, func() {
-		cache := NewLruCache(100)
+		cache := &lruCache{
+			maxSize:  100,
+			list:     list.New(),
+			elements: make(map[interface{}]*list.Element),
+		}
+
 		cache.Put(10, "ten")
 		cache.Put(11, "eleven")
 		cache.Put(12, "twelve")

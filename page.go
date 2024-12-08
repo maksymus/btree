@@ -95,11 +95,50 @@ func NewLeafPage() *LeafPage {
 }
 
 func (p *InternalPage) Find(key []byte) Cell {
-	panic("TODO")
+	// dummy cell with left page
+	if p.cells[0].Compare(key) > 0 {
+		return NewInternalCell(nil, p.left)
+	}
+
+	start, end := 0, len(p.cells)-1
+
+	for start < end {
+		mid := start + (end-start)/2
+		cell := p.cells[mid]
+
+		if cell.Compare(key) == 0 {
+			return cell
+		}
+
+		if cell.Compare(key) < 0 {
+			start = mid + 1
+		} else {
+			end = mid
+		}
+	}
+
+	return p.cells[end]
 }
 
 func (p *LeafPage) Find(key []byte) Cell {
-	panic("TODO")
+	start, end := 0, len(p.cells)-1
+
+	for start <= end {
+		mid := start + (end-start)/2
+		cell := p.cells[mid]
+
+		if cell.Compare(key) == 0 {
+			return cell
+		}
+
+		if cell.Compare(key) < 0 {
+			start = mid + 1
+		} else {
+			end = mid - 1
+		}
+	}
+
+	return nil
 }
 
 func (p *InternalPage) Insert(key []byte, childPage uint32) {

@@ -190,20 +190,22 @@ func (p *LeafPage) Insert(key []byte, data []byte) {
 
 func (p *BTreePage[T]) read(bs []byte) {
 	header := PageHeader{}
-	header.flags = binary.LittleEndian.Uint16(bs[:2])
-	header.lower = binary.LittleEndian.Uint16(bs[2:4])
-	header.upper = binary.LittleEndian.Uint16(bs[4:6])
-	header.numCells = binary.LittleEndian.Uint16(bs[6:8])
-	header.left = binary.LittleEndian.Uint32(bs[8:12])
+	header.flags = binary.BigEndian.Uint16(bs[0:2])
+	header.lower = binary.BigEndian.Uint16(bs[2:4])
+	header.upper = binary.BigEndian.Uint16(bs[4:6])
+	header.numCells = binary.BigEndian.Uint16(bs[6:8])
+	header.left = binary.BigEndian.Uint32(bs[8:12])
 
 	p.PageHeader = header
 	for i := 0; i < int(header.numCells); i++ {
 		pos := PageHeaderSize + (i * CellPointerSize)
-		offset := binary.LittleEndian.Uint16(bs[pos+0 : pos+2])
-		length := binary.LittleEndian.Uint16(bs[pos+2 : pos+4])
+		offset := binary.BigEndian.Uint16(bs[pos+0 : pos+2])
+		length := binary.BigEndian.Uint16(bs[pos+2 : pos+4])
 
 		pointer := CellPointer{offset, length}
 		cell := p.cellGen(pointer)
+
+		cell.Read(bs[offset : offset+length])
 		p.cells = append(p.cells, cell)
 	}
 }

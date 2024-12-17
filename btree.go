@@ -30,7 +30,7 @@ func (b *BTree) Open() {
 
 	// create file if not exists
 	if _, err := os.Stat(b.filename); os.IsNotExist(err) {
-		file, err = os.Create(b.filename)
+		b.file, err = os.Create(b.filename)
 		if err != nil {
 			panic(err)
 		}
@@ -115,7 +115,7 @@ func (b *BTree) readPage(pageNum uint32) ([]byte, error) {
 	bs := make([]byte, PageSize)
 	offset := FileHeaderSize + PageSize*(pageNum-1)
 	_, err := b.file.ReadAt(bs, int64(offset))
-	return nil, err
+	return bs, err
 }
 
 func (b *BTree) writePage(pageNum uint32, bs []byte) error {

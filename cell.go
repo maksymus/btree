@@ -68,7 +68,7 @@ func NewLeafCell(key []byte, data []byte) *LeafCell {
 			keySize: uint32(len(key)),
 			key:     key,
 		},
-		dataSize: uint32(len(key)),
+		dataSize: uint32(len(data)),
 		data:     data,
 	}
 }

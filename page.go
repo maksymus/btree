@@ -1,6 +1,9 @@
 package main
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"sort"
+)
 
 /**
  * Page
@@ -142,11 +145,47 @@ func (p *LeafPage) Find(key []byte) Cell {
 }
 
 func (p *InternalPage) Insert(key []byte, childPage uint32) {
-	panic("TODO")
+	cell := NewInternalCell(key, childPage)
+
+	neededSize := cell.Size() + CellPointerSize
+	if neededSize > uint(p.freeSpace()) {
+		// TODO handle split
+	}
+
+	cell.CellPointer = CellPointer{p.upper - uint16(cell.Size()), uint16(cell.Size())}
+
+	p.lower += CellPointerSize
+	p.upper -= uint16(cell.Size())
+
+	p.cells = append(p.cells, cell)
+
+	sort.Slice(p.cells, func(i, j int) bool {
+		return p.cells[i].Compare(p.cells[j].key) < 0
+	})
+
+	p.numCells++
 }
 
 func (p *LeafPage) Insert(key []byte, data []byte) {
-	panic("TODO")
+	cell := NewLeafCell(key, data)
+
+	neededSize := cell.Size() + CellPointerSize
+	if neededSize > uint(p.freeSpace()) {
+		// TODO handle split
+	}
+
+	cell.CellPointer = CellPointer{p.upper - uint16(cell.Size()), uint16(cell.Size())}
+
+	p.lower += CellPointerSize
+	p.upper -= uint16(cell.Size())
+
+	p.cells = append(p.cells, cell)
+
+	sort.Slice(p.cells, func(i, j int) bool {
+		return p.cells[i].Compare(p.cells[j].key) < 0
+	})
+
+	p.numCells++
 }
 
 func (p *BTreePage[T]) read(bs []byte) {
@@ -202,4 +241,8 @@ func read(bs []byte) Page {
 
 func write(p Page, bs []byte) {
 	p.write(bs)
+}
+
+func (p PageHeader) freeSpace() uint16 {
+	return p.upper - p.lower
 }

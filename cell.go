@@ -42,6 +42,7 @@ type (
 
 	InternalCell struct {
 		BTreeCell
+		// pointer to a child page
 		page uint32
 	}
 

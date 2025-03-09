@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"reflect"
 	"sort"
 )
 
@@ -38,8 +39,7 @@ type (
 
 	BTreePage[T Cell] struct {
 		PageHeader
-		cells   []T
-		cellGen func(pointer CellPointer) T
+		cells []T
 	}
 
 	InternalPage struct {
@@ -71,29 +71,13 @@ func CreateLeafPage() *LeafPage {
 
 func NewInternalPage() *InternalPage {
 	return &InternalPage{
-		BTreePage[*InternalCell]{
-			cellGen: func(pointer CellPointer) *InternalCell {
-				return &InternalCell{
-					BTreeCell: BTreeCell{
-						CellPointer: pointer,
-					},
-				}
-			},
-		},
+		BTreePage[*InternalCell]{},
 	}
 }
 
 func NewLeafPage() *LeafPage {
 	return &LeafPage{
-		BTreePage[*LeafCell]{
-			cellGen: func(pointer CellPointer) *LeafCell {
-				return &LeafCell{
-					BTreeCell: BTreeCell{
-						CellPointer: pointer,
-					},
-				}
-			},
-		},
+		BTreePage[*LeafCell]{},
 	}
 }
 
@@ -203,10 +187,15 @@ func (p *BTreePage[T]) read(bs []byte) {
 		length := binary.BigEndian.Uint16(bs[pos+2 : pos+4])
 
 		pointer := CellPointer{offset, length}
-		cell := p.cellGen(pointer)
 
-		cell.Read(bs[offset : offset+length])
-		p.cells = append(p.cells, cell)
+		var t T
+		refCell := reflect.New(reflect.TypeOf(t).Elem()).Interface()
+
+		if cell, ok := refCell.(Cell); ok {
+			cell.SetPointer(pointer)
+			cell.Read(bs[offset : offset+length])
+			p.cells = append(p.cells, any(cell).(T))
+		}
 	}
 }
 
@@ -220,7 +209,7 @@ func (p *BTreePage[T]) write(bs []byte) {
 	for i, cell := range p.cells {
 		pos := PageHeaderSize + (i * CellPointerSize)
 
-		pointer := cell.GetCellPointer()
+		pointer := cell.GetPointer()
 		binary.BigEndian.PutUint16(bs[pos+0:pos+2], pointer.offset)
 		binary.BigEndian.PutUint16(bs[pos+2:pos+4], pointer.length)
 		cell.Write(bs[pointer.offset : pointer.offset+pointer.length])

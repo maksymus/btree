@@ -24,7 +24,9 @@ type (
 		Read(bs []byte)
 		Compare(bs []byte) int
 
-		GetCellPointer() CellPointer
+		GetPointer() CellPointer
+		SetPointer(CellPointer)
+
 		GetPage() uint32
 		GetData() []byte
 	}
@@ -74,8 +76,12 @@ func NewLeafCell(key []byte, data []byte) *LeafCell {
 	}
 }
 
-func (c *BTreeCell) GetCellPointer() CellPointer {
+func (c *BTreeCell) GetPointer() CellPointer {
 	return c.CellPointer
+}
+
+func (c *BTreeCell) SetPointer(cp CellPointer) {
+	c.CellPointer = cp
 }
 
 func (c *BTreeCell) Compare(bs []byte) int {

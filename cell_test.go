@@ -175,8 +175,24 @@ func TestLeafCell_Write(t *testing.T) {
 		name   string
 		fields fields
 		args   args
+		want   []byte
 	}{
-		// TODO: Add test cases.
+		{
+			name: "write cell to bytes",
+			fields: fields{
+				BTreeCell: BTreeCell{
+					CellPointer: CellPointer{},
+					keySize:     11, // 11 bytes for "hello world"
+					key:         []byte("hello world"),
+				},
+				dataSize: 9,
+				data:     []byte("some data"),
+			},
+			args: args{
+				bs: make([]byte, 19), // 4 bytes for key size + 4 bytes for data size + 11 bytes for key + 9 bytes for data
+			},
+			want: []byte{ /*key size*/ 0, 0, 0, 11 /*data size*/, 0, 0, 0, 9 /*key*/, 'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd' /**data*/, 's', 'o', 'm', 'e', ' ', 'd', 'a', 't', 'a'},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -203,8 +219,23 @@ func TestLeafCell_Read(t *testing.T) {
 		name   string
 		fields fields
 		args   args
+		want   *LeafCell
 	}{
-		// TODO: Add test cases.
+		{
+			name: "read cell from bytes",
+			args: args{
+				bs: []byte{ /*key size*/ 0, 0, 0, 3 /*data size*/, 0, 0, 0, 4 /*key*/, 'k', 'e', 'y' /*data*/, 'd', 'a', 't', 'a'},
+			},
+			want: &LeafCell{
+				BTreeCell: BTreeCell{
+					CellPointer: CellPointer{},
+					keySize:     3, // 3 bytes for "key"
+					key:         []byte("key"),
+				},
+				dataSize: 4,
+				data:     []byte("data"),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
